@@ -8,6 +8,29 @@ on:
 
 jobs:
   # --------------------------------------------------------------------------
+  # pre-commit hooks
+  # --------------------------------------------------------------------------
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Run pre-commit (all files)
+        run: uv run pre-commit run --all-files
+
+  # --------------------------------------------------------------------------
   # Python – lint, type-check, test
   # --------------------------------------------------------------------------
   python:
