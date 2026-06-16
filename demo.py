@@ -24,6 +24,12 @@ app = marimo.App(width="medium")
 @app.cell(hide_code=True)
 def _():
     import marimo as mo
+    import sys
+
+    if sys.platform == "emscripten":
+        import micropip
+        await micropip.install("rinse-descriptor")
+
 
     return (mo,)
 
