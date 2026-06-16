@@ -158,8 +158,9 @@ def compute_structure_factors(
         else:
             st = _build_small_structure(crystal, b_use, gemmi_mod)
         if debug:
+            _ms = (time.perf_counter() - _t) * 1e3
             print(
-                f"[rinse_descriptor] sf: build structure:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+                f"[rinse_descriptor] sf: build structure:  {_ms:8.2f} ms  "
                 f"({crystal.n_atoms} atoms)",
                 file=sys.stderr,
             )

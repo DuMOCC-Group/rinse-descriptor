@@ -23,8 +23,9 @@ app = marimo.App(width="medium")
 
 @app.cell(hide_code=True)
 def _():
-    import marimo as mo
     import sys
+
+    import marimo as mo
 
     if sys.platform == "emscripten":
         import micropip
@@ -530,7 +531,7 @@ def _(
 ):
     if compute_error or P is None:
         mo.stop(True)
-    
+
     _base = crystal
 
     _scales = np.round(np.arange(-0.1, 0.1001, 0.01), 2)
@@ -809,8 +810,6 @@ def _(
         except Exception as _e:
             _error = str(_e)
 
-    crystal2 = _crystal
-    params2 = _params
     P2 = _P
     vec2 = _vec
     compute_error2 = _error
@@ -830,8 +829,9 @@ def _(P, P2, compute_error, compute_error2, mo, plt, vec, vec2):
     _ax.fill_between(range(len(_vec2)), _vec2, alpha=0.5, color="#EECC66")
     _ax.set_xlabel("Descriptor index  (row-major: i·l_max + k)", fontsize=9)
     _ax.set_ylabel("p_{nk}", fontsize=9)
+    _corr = _distance.correlation(vec, vec2)
     _ax.set_title(
-        f"Descriptor vector2 ({len(_vec)} elements, correlation distance = {_distance.correlation(vec,vec2):.5f})",
+        f"Descriptor vector2 ({len(_vec)} elements, correlation distance = {_corr:.5f})",
         fontsize=10,
     )
     _ax.set_xlim(0, len(_vec) - 1)
