@@ -20,9 +20,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 from ase.io import read as ase_read
-from rinse import Crystal, RinseParams, descriptor, descriptor_many
-from rinse._descriptor import compute_power_spectrum
-from rinse._structure_factors import ReflectionList, compute_structure_factors
+from rinse_descriptor import Crystal, RinseParams, descriptor, descriptor_many
+from rinse_descriptor._descriptor import compute_power_spectrum
+from rinse_descriptor._structure_factors import ReflectionList, compute_structure_factors
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

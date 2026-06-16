@@ -23,9 +23,9 @@ def _():
 def _():
     import matplotlib.pyplot as plt
     import numpy as np
-    from rinse import Crystal, RinseParams, descriptor
-    from rinse._descriptor import compute_power_spectrum, power_spectrum_to_vector
-    from rinse._structure_factors import compute_structure_factors
+    from rinse_descriptor import Crystal, RinseParams, descriptor
+    from rinse_descriptor._descriptor import compute_power_spectrum, power_spectrum_to_vector
+    from rinse_descriptor._structure_factors import compute_structure_factors
 
     return (
         Crystal,
@@ -323,7 +323,7 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(basis_dd, n_max_slider, np, plt, stol_slider):
-    from rinse._radial_basis import evaluate_radial_basis as _eval_basis
+    from rinse_descriptor._radial_basis import evaluate_radial_basis as _eval_basis
 
     _q_max = 2.0 * stol_slider.value
     _n_max = n_max_slider.value

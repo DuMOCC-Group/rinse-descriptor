@@ -3,7 +3,7 @@
 Quick start
 -----------
 >>> from ase.build import bulk
->>> from rinse import descriptor, RinseParams
+>>> from rinse_descriptor import descriptor, RinseParams
 >>> atoms = bulk("NaCl", "rocksalt", a=5.64)
 >>> x = descriptor(atoms)           # (8, 16) ndarray, or 128-element vector
 >>> x.shape
@@ -68,7 +68,7 @@ def descriptor(
     Parameters
     ----------
     atoms:
-        An :class:`ase.Atoms` object, a :class:`~rinse.Crystal`, or a path
+        An :class:`ase.Atoms` object, a :class:`~rinse_descriptor.Crystal`, or a path
         to a CIF file (str / :class:`pathlib.Path`).
     params:
         Descriptor hyper-parameters.  Uses defaults if *None*:
@@ -97,17 +97,17 @@ def descriptor(
 
     if debug:
         if isinstance(atoms, (str, pathlib.Path)):
-            print(f"[rinse] input: CIF {atoms}", file=sys.stderr)
+            print(f"[rinse_descriptor] input: CIF {atoms}", file=sys.stderr)
         elif isinstance(atoms, Crystal):
-            print(f"[rinse] input: Crystal ({atoms.n_atoms} atoms)", file=sys.stderr)
+            print(f"[rinse_descriptor] input: Crystal ({atoms.n_atoms} atoms)", file=sys.stderr)
         else:
-            print(f"[rinse] input: {type(atoms).__name__}", file=sys.stderr)
+            print(f"[rinse_descriptor] input: {type(atoms).__name__}", file=sys.stderr)
 
     _t = time.perf_counter()
     crystal = _to_crystal(atoms)
     if debug:
         print(
-            f"[rinse]   load structure:     {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   load structure:     {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"({crystal.n_atoms} atoms)",
             file=sys.stderr,
         )
@@ -126,7 +126,7 @@ def descriptor(
     )
     if debug:
         print(
-            f"[rinse]   structure factors:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   structure factors:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"({len(reflections)} reflections)",
             file=sys.stderr,
         )
@@ -135,11 +135,11 @@ def descriptor(
     P = compute_power_spectrum(reflections, params=params, debug=debug, l2=l2, log1p=log1p)
     if debug:
         print(
-            f"[rinse]   power spectrum:     {(time.perf_counter() - _t) * 1e3:8.2f} ms",
+            f"[rinse_descriptor]   power spectrum:     {(time.perf_counter() - _t) * 1e3:8.2f} ms",
             file=sys.stderr,
         )
         print(
-            f"[rinse]   TOTAL:              {(time.perf_counter() - t0) * 1e3:8.2f} ms",
+            f"[rinse_descriptor]   TOTAL:              {(time.perf_counter() - t0) * 1e3:8.2f} ms",
             file=sys.stderr,
         )
 
@@ -161,7 +161,7 @@ def descriptor_many(
     Parameters
     ----------
     structures:
-        Iterable of :class:`ase.Atoms`, :class:`~rinse.Crystal`, or CIF paths.
+        Iterable of :class:`ase.Atoms`, :class:`~rinse_descriptor.Crystal`, or CIF paths.
     params:
         Shared descriptor hyper-parameters.
     form_factor_type, structure_factor_type:
@@ -206,5 +206,5 @@ def _to_crystal(atoms: object) -> Crystal:
         return Crystal.from_ase(atoms)
     except TypeError as exc:
         raise TypeError(
-            f"Expected ase.Atoms, rinse.Crystal, or a CIF file path, got {type(atoms)}"
+            f"Expected ase.Atoms, rinse_descriptor.Crystal, or a CIF file path, got {type(atoms)}"
         ) from exc

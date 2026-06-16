@@ -261,7 +261,7 @@ def compute_power_spectrum(
     ----------
     reflections:
         Pre-computed reflection list from
-        :func:`~rinse._structure_factors.compute_structure_factors`.
+        :func:`~rinse_descriptor._structure_factors.compute_structure_factors`.
     params:
         Descriptor hyper-parameters.  Uses defaults if *None*.
     log1p:
@@ -301,7 +301,7 @@ def compute_power_spectrum(
     )  # (M, n_max)
     if debug:
         print(
-            f"[rinse]   ps: radial basis:     {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   ps: radial basis:     {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"({M} reflections, basis={params.radial_basis!r})",
             file=sys.stderr,
         )
@@ -314,7 +314,7 @@ def compute_power_spectrum(
     sph_cache = _SphHarmCache(unit_vecs, params.l_values)
     if debug:
         print(
-            f"[rinse]   ps: sph harm cache:   {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   ps: sph harm cache:   {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"(l_max={params.l_max})",
             file=sys.stderr,
         )
@@ -334,7 +334,7 @@ def compute_power_spectrum(
 
     if debug:
         print(
-            f"[rinse]   ps: accumulate:       {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   ps: accumulate:       {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"(n_max={params.n_max})",
             file=sys.stderr,
         )
@@ -343,7 +343,7 @@ def compute_power_spectrum(
     result = normalise_power_spectrum(P, log1p=log1p, l2=l2)
     if debug:
         print(
-            f"[rinse]   ps: normalise:        {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   ps: normalise:        {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"(method='{'log1p+' if log1p else ''}{'l2' if l2 else ''}')",
             file=sys.stderr,
         )

@@ -38,8 +38,8 @@ contributes. Default parameters give a **8 × 16 = 128-element** descriptor:
 
 ```bash
 # Clone
-git clone https://github.com/DuMOCC-Group/rinse.git
-cd rinse
+git clone https://github.com/DuMOCC-Group/rinse-descriptor.git
+cd rinse-descriptor
 
 # Install uv (if not already available)
 curl -Ls https://astral.sh/uv/install.sh | sh
@@ -51,9 +51,9 @@ uv sync
 ### From PyPI (once published)
 
 ```bash
-pip install rinse
+pip install rinse-descriptor
 # or
-uv add rinse
+uv add rinse-descriptor
 ```
 
 ## Quick start
@@ -62,7 +62,7 @@ uv add rinse
 
 ```python
 from ase.build import bulk
-from rinse import descriptor, descriptor_many, RinseParams
+from rinse_descriptor import descriptor, descriptor_many, RinseParams
 
 # Single structure → (8, 16) matrix
 atoms = bulk("NaCl", "rocksalt", a=5.64)
@@ -82,7 +82,7 @@ print(X.shape)  # (2, 8, 16)
 ### From a CIF file
 
 ```python
-from rinse import descriptor
+from rinse_descriptor import descriptor
 
 x = descriptor("mystructure.cif")
 print(x.shape)  # (8, 16)
@@ -91,7 +91,7 @@ print(x.shape)  # (8, 16)
 ### Custom parameters
 
 ```python
-from rinse import RinseParams, descriptor
+from rinse_descriptor import RinseParams, descriptor
 
 params = RinseParams(
     n_max=8,                       # radial basis order (n = 0 … 7)
@@ -105,7 +105,7 @@ x = descriptor(atoms, params=params)
 ### Form factors and structure factor type
 
 ```python
-from rinse import descriptor
+from rinse_descriptor import descriptor
 
 # Electron scattering factors, intensities
 x = descriptor(atoms, form_factor_type="electron", structure_factor_type="F2")
@@ -130,7 +130,7 @@ uv run pytest benchmarks/ --benchmark-only -v
 # Lint / format
 uv run ruff check python/ tests/
 uv run ruff format python/ tests/
-uv run mypy python/rinse/
+uv run mypy python/rinse_descriptor/
 ```
 
 ### Pre-commit hooks (recommended)
@@ -151,8 +151,8 @@ uv run pre-commit run --all-files
 ## Project structure
 
 ```
-rinse/
-├── python/rinse/          # Python package
+rinse-descriptor/
+├── python/rinse_descriptor/  # Python package
 │   ├── __init__.py        # Public API: descriptor(), descriptor_many()
 │   ├── _crystal.py        # Crystal dataclass (ASE/Gemmi-independent)
 │   ├── _structure_factors.py  # Gemmi structure factor calculation
@@ -164,9 +164,9 @@ rinse/
 └── pyproject.toml
 ```
 
-## Future: `rinse.diffraction` submodule
+## Future: `rinse_descriptor.diffraction` submodule
 
-The package is designed to support a future `rinse.diffraction` submodule that will provide:
+The package is designed to support a future `rinse_descriptor.diffraction` submodule that will provide:
 
 - Indexed diffraction patterns (hkl, d-spacing, intensity)
 - Unindexed powder diffraction patterns (2θ or *d*-spacing profiles)

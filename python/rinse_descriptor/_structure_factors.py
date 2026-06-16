@@ -156,7 +156,7 @@ def compute_structure_factors(
         st = _build_small_structure(crystal, b_use, gemmi_mod)
     if debug:
         print(
-            f"[rinse]   sf: build structure:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   sf: build structure:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"({crystal.n_atoms} atoms)",
             file=sys.stderr,
         )
@@ -168,7 +168,7 @@ def compute_structure_factors(
     hkl_arr = _enumerate_hkl(recip, q_max)
     if debug:
         print(
-            f"[rinse]   sf: enumerate hkl:   {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   sf: enumerate hkl:   {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"({hkl_arr.shape[0]} candidates, q_max={q_max:.3f} Å⁻¹)",
             file=sys.stderr,
         )
@@ -191,7 +191,7 @@ def compute_structure_factors(
         F_vals = _calc_gemmi(calc, st, hkl_arr)
     if debug:
         print(
-            f"[rinse]   sf: calculate F(hkl):{(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   sf: calculate F(hkl):{(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"(M={hkl_arr.shape[0]}, ff={ff_type.value!r})",
             file=sys.stderr,
         )
@@ -202,7 +202,7 @@ def compute_structure_factors(
     q_magnitudes = np.linalg.norm(q_vectors, axis=1)  # (M,)
     if debug:
         print(
-            f"[rinse]   sf: q-vectors:        {(time.perf_counter() - _t) * 1e3:8.2f} ms",
+            f"[rinse_descriptor]   sf: q-vectors:        {(time.perf_counter() - _t) * 1e3:8.2f} ms",
             file=sys.stderr,
         )
 
@@ -217,7 +217,7 @@ def compute_structure_factors(
         raise ValueError(f"Unknown structure factor type: {sf_type}")
     if debug:
         print(
-            f"[rinse]   sf: normalise:        {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   sf: normalise:        {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"(type={sf_type.value!r})",
             file=sys.stderr,
         )

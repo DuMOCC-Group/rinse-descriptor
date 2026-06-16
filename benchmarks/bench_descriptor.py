@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from ase.build import bulk, make_supercell
-from rinse import RinseParams, descriptor
+from rinse_descriptor import RinseParams, descriptor
 
 
 @pytest.fixture(scope="module")

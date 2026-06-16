@@ -23,7 +23,7 @@ repos:
         stages: [pre-push]
       - id: mypy
         name: mypy (package)
-        entry: uv run mypy python/rinse/
+        entry: uv run mypy python/rinse_descriptor/
         language: system
         pass_filenames: false
         stages: [pre-push]
