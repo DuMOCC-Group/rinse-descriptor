@@ -199,6 +199,7 @@ def compute_structure_factors(
 
         F_vals = calc_sf_gauss(crystal, hkl_arr, recip)
     else:
+        assert st is not None
         calc = _make_calculator(st.cell, ff_type, gemmi_mod)
         F_vals = _calc_gemmi(calc, st, hkl_arr)
     if debug:

@@ -471,9 +471,9 @@ def crystal_from_cif_pure(path: str) -> Crystal:
     frac_z_raw = d.get("_atom_site_fract_z", [])
     if not isinstance(frac_x_raw, list) or not frac_x_raw:
         raise ValueError(f"No fractional coordinates found in CIF {path!r}")
-    frac_x: list[str] = frac_x_raw  # type: ignore[assignment]
-    frac_y: list[str] = frac_y_raw  # type: ignore[assignment]
-    frac_z: list[str] = frac_z_raw  # type: ignore[assignment]
+    frac_x = cast(list[str], frac_x_raw)
+    frac_y = cast(list[str], frac_y_raw)
+    frac_z = cast(list[str], frac_z_raw)
 
     occ_col: list[str] | None = None
     ov = d.get("_atom_site_occupancy")
