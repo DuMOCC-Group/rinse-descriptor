@@ -29,6 +29,11 @@ def _():
 
     if sys.platform == "emscripten":
         import micropip
+
+        # gemmi has no pure-Python wheel; stub it so micropip can resolve
+        # rinse-descriptor's dependencies. Our code detects the stub at
+        # runtime and falls back to the built-in pure-Python implementation.
+        micropip.add_mock_package("gemmi", "0.7.0")
         await micropip.install("rinse-descriptor")
 
 

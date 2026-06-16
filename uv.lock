@@ -1506,14 +1506,10 @@ version = "1.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "ase" },
+    { name = "gemmi" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "scipy" },
-]
-
-[package.optional-dependencies]
-gemmi = [
-    { name = "gemmi" },
 ]
 
 [package.dev-dependencies]
@@ -1531,12 +1527,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "ase", specifier = ">=3.23.0" },
-    { name = "gemmi", marker = "extra == 'gemmi'", specifier = ">=0.6.7" },
+    { name = "gemmi", specifier = ">=0.6.7" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=3.0.3" },
     { name = "scipy", specifier = ">=1.12" },
 ]
-provides-extras = ["gemmi"]
 
 [package.metadata.requires-dev]
 dev = [

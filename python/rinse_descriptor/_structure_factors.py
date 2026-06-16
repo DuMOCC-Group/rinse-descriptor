@@ -127,8 +127,11 @@ def compute_structure_factors(
     gemmi_mod: Any = None
     try:
         import gemmi as _gemmi
+        # Guard against mock/stub installs (e.g. micropip.add_mock_package):
+        # verify the module exposes the expected API before trusting it.
+        _gemmi.SmallStructure  # noqa: B018
         gemmi_mod = _gemmi
-    except ImportError:
+    except (ImportError, AttributeError):
         _gemmi_available = False
 
     ff_type = FormFactorType(form_factor_type)
