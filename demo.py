@@ -98,6 +98,38 @@ def _(mo):
 def _(mo):
     mo.md("""
     ## Descriptor parameters
+    Radial basis has a significant impact on the descriptor.
+    The smooth_shells_nl seems to work well, equally weighting
+    all parts of reciprocal space in a predictable way.
+    smooth_shells_cw (with high n_max) can be used to generate
+    a quasi powder pattern at each multipole level. Chebyshev
+    and Bessel (0th order) functions are included because they
+    are well behaved but seem to give less useful descriptors.
+
+    X-ray form factors really the only sensible option.
+    Others are included just for comparison.
+
+    l_min and l_max set the number of spherical harmonic levels.
+    Keep l_max low, as the basis functions are relatively slow
+    to compute. You may want to set l_min to 4 to remove l_0
+    (monopole) and l_3 (quadrupole levels). Monopoles (if
+    present) dominate the descriptor as they have no negative
+    regions. Quadrupoles vanish in cubic symmetry crystals,
+    so contribute no information. "Include odd l" is an
+    option to demonstrate that the odd levels (dipole,
+    octopole...) are always zero because of Friedel's law, if
+    the structure factor calculations neglect anomalous
+    dispersion (they do).
+
+    sin_theta_over_lambda_max controls how far out strucure
+    factors are calculated. This is generally the slowest step.
+    0.6 is atomic resolution, and this should be more than enough.
+    It may be justfied to reduce this.
+
+    log1p compression reduces the dynamic range of the descriptor.
+    This is generally required when monopoles are included.
+    l2 normalisation simply puts all descriptor vectors on a
+    common scale. This should be left on.
     """)
     return
 
