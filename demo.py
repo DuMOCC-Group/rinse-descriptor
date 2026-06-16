@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.14"
+# dependencies = [
+#     "marimo>=0.23.9",
+#     "matplotlib==3.11.0",
+#     "numpy==2.4.6",
+#     "rinse-descriptor==0.1.0",
+# ]
+# ///
 """RINSE Descriptor Demo – marimo notebook.
 
 Run with:
