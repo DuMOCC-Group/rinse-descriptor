@@ -7,10 +7,10 @@ and angular basis (analogous to SOAP, but working entirely in reciprocal space).
 ## Descriptor formulation
 
 For a crystal, all reflections $\mathbf{G}_{\mathrm{hkl}}$ within a resolution cutoff
-(default $\sin{\theta}/\lambda \leq 0.6 Å^{-1}$ , i.e. $\mathbf{G} \leq 0.6 Å^{-1}$) are enumerated.
+(default $\sin{\theta}/\lambda \leq 0.6 Å^{-1}$ , i.e. $\mathbf{G} \leq 1.2 Å^{-1}$) are enumerated.
 Each reflection is assigned an intensity $\mathrm{I}(\mathbf{G}) = \lvert\mathrm{F}(\mathbf{G})\rvert^{2}$ from the
 structure factor calculated via Gemmi (direct summation, IT92 X-ray form
-factors by default).
+factors by default), or a crude pure Python implementation.
 
 The expansion coefficients are:
 
@@ -46,9 +46,12 @@ curl -Ls https://astral.sh/uv/install.sh | sh
 
 # Install all dependencies
 uv sync
+
+# Run the demo.py notebook
+uv run marimo edit demo.py
 ```
 
-### From PyPI (once published)
+### From PyPI
 
 ```bash
 pip install rinse-descriptor
