@@ -33,19 +33,98 @@ _B_GAUSS: float = 2.0
 # ---------------------------------------------------------------------------
 
 _SYMBOL_TO_Z: dict[str, int] = {
-    "H": 1, "He": 2, "Li": 3, "Be": 4, "B": 5, "C": 6, "N": 7, "O": 8,
-    "F": 9, "Ne": 10, "Na": 11, "Mg": 12, "Al": 13, "Si": 14, "P": 15,
-    "S": 16, "Cl": 17, "Ar": 18, "K": 19, "Ca": 20, "Sc": 21, "Ti": 22,
-    "V": 23, "Cr": 24, "Mn": 25, "Fe": 26, "Co": 27, "Ni": 28, "Cu": 29,
-    "Zn": 30, "Ga": 31, "Ge": 32, "As": 33, "Se": 34, "Br": 35, "Kr": 36,
-    "Rb": 37, "Sr": 38, "Y": 39, "Zr": 40, "Nb": 41, "Mo": 42, "Tc": 43,
-    "Ru": 44, "Rh": 45, "Pd": 46, "Ag": 47, "Cd": 48, "In": 49, "Sn": 50,
-    "Sb": 51, "Te": 52, "I": 53, "Xe": 54, "Cs": 55, "Ba": 56, "La": 57,
-    "Ce": 58, "Pr": 59, "Nd": 60, "Pm": 61, "Sm": 62, "Eu": 63, "Gd": 64,
-    "Tb": 65, "Dy": 66, "Ho": 67, "Er": 68, "Tm": 69, "Yb": 70, "Lu": 71,
-    "Hf": 72, "Ta": 73, "W": 74, "Re": 75, "Os": 76, "Ir": 77, "Pt": 78,
-    "Au": 79, "Hg": 80, "Tl": 81, "Pb": 82, "Bi": 83, "Po": 84, "At": 85,
-    "Rn": 86, "Fr": 87, "Ra": 88, "Ac": 89, "Th": 90, "Pa": 91, "U": 92,
+    "H": 1,
+    "He": 2,
+    "Li": 3,
+    "Be": 4,
+    "B": 5,
+    "C": 6,
+    "N": 7,
+    "O": 8,
+    "F": 9,
+    "Ne": 10,
+    "Na": 11,
+    "Mg": 12,
+    "Al": 13,
+    "Si": 14,
+    "P": 15,
+    "S": 16,
+    "Cl": 17,
+    "Ar": 18,
+    "K": 19,
+    "Ca": 20,
+    "Sc": 21,
+    "Ti": 22,
+    "V": 23,
+    "Cr": 24,
+    "Mn": 25,
+    "Fe": 26,
+    "Co": 27,
+    "Ni": 28,
+    "Cu": 29,
+    "Zn": 30,
+    "Ga": 31,
+    "Ge": 32,
+    "As": 33,
+    "Se": 34,
+    "Br": 35,
+    "Kr": 36,
+    "Rb": 37,
+    "Sr": 38,
+    "Y": 39,
+    "Zr": 40,
+    "Nb": 41,
+    "Mo": 42,
+    "Tc": 43,
+    "Ru": 44,
+    "Rh": 45,
+    "Pd": 46,
+    "Ag": 47,
+    "Cd": 48,
+    "In": 49,
+    "Sn": 50,
+    "Sb": 51,
+    "Te": 52,
+    "I": 53,
+    "Xe": 54,
+    "Cs": 55,
+    "Ba": 56,
+    "La": 57,
+    "Ce": 58,
+    "Pr": 59,
+    "Nd": 60,
+    "Pm": 61,
+    "Sm": 62,
+    "Eu": 63,
+    "Gd": 64,
+    "Tb": 65,
+    "Dy": 66,
+    "Ho": 67,
+    "Er": 68,
+    "Tm": 69,
+    "Yb": 70,
+    "Lu": 71,
+    "Hf": 72,
+    "Ta": 73,
+    "W": 74,
+    "Re": 75,
+    "Os": 76,
+    "Ir": 77,
+    "Pt": 78,
+    "Au": 79,
+    "Hg": 80,
+    "Tl": 81,
+    "Pb": 82,
+    "Bi": 83,
+    "Po": 84,
+    "At": 85,
+    "Rn": 86,
+    "Fr": 87,
+    "Ra": 88,
+    "Ac": 89,
+    "Th": 90,
+    "Pa": 91,
+    "U": 92,
 }
 
 
@@ -220,8 +299,12 @@ def _to_float(s: object, default: float = 0.0) -> float:
 
 
 def _cell_matrix(
-    a: float, b: float, c: float,
-    alpha: float, beta: float, gamma: float,
+    a: float,
+    b: float,
+    c: float,
+    alpha: float,
+    beta: float,
+    gamma: float,
 ) -> NDArray[np.float64]:
     """Build a (3, 3) cell matrix (rows = lattice vectors **a**, **b**, **c**).
 
@@ -237,9 +320,7 @@ def _cell_matrix(
     cy = c * (cos_a - cos_b * cos_g) / sin_g
     cz = math.sqrt(max(c * c - cx * cx - cy * cy, 0.0))
     return np.array(
-        [[a, 0.0, 0.0],
-         [bx, by, 0.0],
-         [cx, cy, cz]],
+        [[a, 0.0, 0.0], [bx, by, 0.0], [cx, cy, cz]],
         dtype=np.float64,
     )
 
@@ -348,7 +429,7 @@ def crystal_from_cif_pure(path: str) -> Crystal:
     b = _to_float(d.get("_cell_length_b"))
     c = _to_float(d.get("_cell_length_c"))
     al = math.radians(_to_float(d.get("_cell_angle_alpha"), 90.0))
-    be = math.radians(_to_float(d.get("_cell_angle_beta"),  90.0))
+    be = math.radians(_to_float(d.get("_cell_angle_beta"), 90.0))
     ga = math.radians(_to_float(d.get("_cell_angle_gamma"), 90.0))
     cell = _cell_matrix(a, b, c, al, be, ga)
 
@@ -413,7 +494,7 @@ def crystal_from_cif_pure(path: str) -> Crystal:
             b_iso_col = bv
             break
 
-    _8pi2 = 8.0 * math.pi ** 2
+    _8pi2 = 8.0 * math.pi**2
     TOL = 1e-4
     n_asym = len(frac_x)
 
@@ -438,11 +519,13 @@ def crystal_from_cif_pure(path: str) -> Crystal:
         if Z == 0:
             Z = 6  # last-resort fallback: carbon
 
-        xyz0 = np.array([
-            _to_float(frac_x[idx]),
-            _to_float(frac_y[idx]),
-            _to_float(frac_z[idx]),
-        ])
+        xyz0 = np.array(
+            [
+                _to_float(frac_x[idx]),
+                _to_float(frac_y[idx]),
+                _to_float(frac_z[idx]),
+            ]
+        )
         occ = _to_float(occ_col[idx], 1.0) if occ_col is not None else 1.0
         if u_iso_col is not None:
             u_iso = _to_float(u_iso_col[idx])
@@ -505,14 +588,14 @@ def calc_sf_gauss(
     shared by all elements.  Anisotropic displacement parameters are ignored.
     """
     inv_cell = np.linalg.inv(crystal.cell)
-    frac_pos = crystal.positions @ inv_cell.T          # (N, 3) fractional
-    Z_vals = crystal.species.astype(np.float64)        # (N,)
-    occ    = np.asarray(crystal.occupancies, dtype=np.float64)  # (N,)
-    u_iso  = np.asarray(crystal.u_iso, dtype=np.float64)        # (N,)
-    B_tot  = _B_GAUSS + 8.0 * math.pi ** 2 * u_iso              # (N,) Å²
+    frac_pos = crystal.positions @ inv_cell.T  # (N, 3) fractional
+    Z_vals = crystal.species.astype(np.float64)  # (N,)
+    occ = np.asarray(crystal.occupancies, dtype=np.float64)  # (N,)
+    u_iso = np.asarray(crystal.u_iso, dtype=np.float64)  # (N,)
+    B_tot = _B_GAUSS + 8.0 * math.pi**2 * u_iso  # (N,) Å²
 
-    q_vecs = hkl.astype(np.float64) @ recip               # (M, 3) Å⁻¹
-    s_sq   = (np.linalg.norm(q_vecs, axis=1) / 2.0) ** 2  # (M,) Å⁻²
+    q_vecs = hkl.astype(np.float64) @ recip  # (M, 3) Å⁻¹
+    s_sq = (np.linalg.norm(q_vecs, axis=1) / 2.0) ** 2  # (M,) Å⁻²
 
     # Form factors f_j(s) – shape (M, N)
     ff = Z_vals[np.newaxis, :] * np.exp(-B_tot[np.newaxis, :] * s_sq[:, np.newaxis])

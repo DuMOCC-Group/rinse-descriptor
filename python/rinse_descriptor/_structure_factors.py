@@ -127,6 +127,7 @@ def compute_structure_factors(
     gemmi_mod: Any = None
     try:
         import gemmi as _gemmi
+
         # Guard against mock/stub installs (e.g. micropip.add_mock_package):
         # verify the module exposes the expected API before trusting it.
         _gemmi.SmallStructure  # noqa: B018
@@ -195,6 +196,7 @@ def compute_structure_factors(
         F_vals = _calc_unity(crystal, hkl_arr, b_use, recip)
     elif not _gemmi_available:
         from ._pure_python import calc_sf_gauss
+
         F_vals = calc_sf_gauss(crystal, hkl_arr, recip)
     else:
         calc = _make_calculator(st.cell, ff_type, gemmi_mod)

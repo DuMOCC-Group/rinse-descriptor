@@ -144,6 +144,7 @@ class Crystal:
             from gemmi import Op, cif, find_spacegroup_by_name, make_small_structure_from_block
         except ImportError:
             from ._pure_python import crystal_from_cif_pure
+
             return crystal_from_cif_pure(path)
 
         doc = cif.read_file(str(path))

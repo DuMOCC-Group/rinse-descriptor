@@ -36,7 +36,6 @@ def _():
         micropip.add_mock_package("gemmi", "0.7.0")
         await micropip.install("rinse-descriptor")
 
-
     return (mo,)
 
 
@@ -150,11 +149,9 @@ def _(mo):
     mo.hstack(
         [
             mo.vstack([n_max_slider, l_max_slider, stol_slider], gap="0.6rem"),
-            mo.vstack([basis_dd,
-                       ff_dd,
-                       norm_dd,
-                       log1p_compression_cb,
-                       l2_normalisation_cb], gap="0.6rem"),
+            mo.vstack(
+                [basis_dd, ff_dd, norm_dd, log1p_compression_cb, l2_normalisation_cb], gap="0.6rem"
+            ),
         ],
         gap="3rem",
         align="start",
@@ -229,11 +226,13 @@ def _(
                 structure_factor_type=norm_dd.value,
                 debug=True,
             )
-            _P = compute_power_spectrum(_refls,
-                                        params=_params,
-                                        l2=l2_normalisation_cb.value,
-                                        log1p=log1p_compression_cb.value,
-                                        debug=True)
+            _P = compute_power_spectrum(
+                _refls,
+                params=_params,
+                l2=l2_normalisation_cb.value,
+                log1p=log1p_compression_cb.value,
+                debug=True,
+            )
             _vec = power_spectrum_to_vector(_P)
         except Exception as _e:
             _error = str(_e)
@@ -439,13 +438,16 @@ def _(
             u_aniso=_base.u_aniso.copy(),
             pbc=_base.pbc.copy(),
         )
-        _scaled_descriptors.append(descriptor(_scaled,
-                                              params=_params,
-                                              l2=l2_normalisation_cb.value,
-                                              log1p=log1p_compression_cb.value,
-                                              structure_factor_type=norm_dd.
-                                              value, form_factor_type=ff_dd.
-                                              value).T.ravel())
+        _scaled_descriptors.append(
+            descriptor(
+                _scaled,
+                params=_params,
+                l2=l2_normalisation_cb.value,
+                log1p=log1p_compression_cb.value,
+                structure_factor_type=norm_dd.value,
+                form_factor_type=ff_dd.value,
+            ).T.ravel()
+        )
 
     _descriptor_matrix = np.stack(_scaled_descriptors, axis=0)
 
@@ -453,11 +455,12 @@ def _(
 
     _distance_metric = _distance.correlation
 
-    _distances = [float(_distance_metric(_descriptor, _descriptor_matrix[int(len(_scales)/2)]))
-                  for _descriptor
-                  in _descriptor_matrix]
+    _distances = [
+        float(_distance_metric(_descriptor, _descriptor_matrix[int(len(_scales) / 2)]))
+        for _descriptor in _descriptor_matrix
+    ]
 
-    _fig, (_ax1, _ax2) = plt.subplots(2,1,figsize=(12, 6))
+    _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
         _descriptor_matrix,
         aspect="auto",
@@ -477,9 +480,9 @@ def _(
     _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
     _cbar1.set_label("Descriptor value", fontsize=9)
 
-    _delta_matrix = np.stack([row - _descriptor_matrix[int(len(_scales)/2)]
-                              for row
-                              in _descriptor_matrix])
+    _delta_matrix = np.stack(
+        [row - _descriptor_matrix[int(len(_scales) / 2)] for row in _descriptor_matrix]
+    )
     _minmax = max(abs(max(_delta_matrix.ravel())), abs(min(_delta_matrix.ravel())))
     _image2 = _ax2.imshow(
         _delta_matrix,
@@ -487,8 +490,8 @@ def _(
         interpolation="nearest",
         cmap="seismic",
         origin="lower",
-        vmin = -_minmax,
-        vmax = _minmax
+        vmin=-_minmax,
+        vmax=_minmax,
     )
     _ax2.set_title("Delta", fontsize=11)
     _ax2.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
@@ -544,7 +547,7 @@ def _(
 
     _scaled_descriptors = []
     for _scale in _scales:
-        _scaled_cell = np.matmul(_base.cell, np.matrix([[1,_scale,0],[0,1,0],[0,0,1]]))
+        _scaled_cell = np.matmul(_base.cell, np.matrix([[1, _scale, 0], [0, 1, 0], [0, 0, 1]]))
         _scaled = Crystal(
             cell=_scaled_cell,
             positions=_base.positions.copy(),
@@ -554,14 +557,16 @@ def _(
             u_aniso=_base.u_aniso.copy(),
             pbc=_base.pbc.copy(),
         )
-        _scaled_descriptors.append(descriptor(_scaled,
-                                              params=_params,
-                                              l2=l2_normalisation_cb.value,
-                                              log1p=log1p_compression_cb.value,
-                                              structure_factor_type=norm_dd.
-                                              value,
-                                              form_factor_type=ff_dd.value
-                                              ).T.ravel())
+        _scaled_descriptors.append(
+            descriptor(
+                _scaled,
+                params=_params,
+                l2=l2_normalisation_cb.value,
+                log1p=log1p_compression_cb.value,
+                structure_factor_type=norm_dd.value,
+                form_factor_type=ff_dd.value,
+            ).T.ravel()
+        )
 
     _descriptor_matrix = np.stack(_scaled_descriptors, axis=0)
 
@@ -569,11 +574,12 @@ def _(
 
     _distance_metric = _distance.correlation
 
-    _distances = [float(_distance_metric(_descriptor, _descriptor_matrix[int(len(_scales)/2)]))
-                  for _descriptor
-                  in _descriptor_matrix]
+    _distances = [
+        float(_distance_metric(_descriptor, _descriptor_matrix[int(len(_scales) / 2)]))
+        for _descriptor in _descriptor_matrix
+    ]
 
-    _fig, (_ax1, _ax2) = plt.subplots(2,1,figsize=(12, 6))
+    _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
         _descriptor_matrix,
         aspect="auto",
@@ -593,9 +599,9 @@ def _(
     _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
     _cbar1.set_label("Descriptor value", fontsize=9)
 
-    _delta_matrix = np.stack([row - _descriptor_matrix[int(len(_scales)/2)]
-                              for row
-                              in _descriptor_matrix])
+    _delta_matrix = np.stack(
+        [row - _descriptor_matrix[int(len(_scales) / 2)] for row in _descriptor_matrix]
+    )
     _minmax = max(abs(max(_delta_matrix.ravel())), abs(min(_delta_matrix.ravel())))
     _image2 = _ax2.imshow(
         _delta_matrix,
@@ -603,8 +609,8 @@ def _(
         interpolation="nearest",
         cmap="seismic",
         origin="lower",
-        vmin = -_minmax,
-        vmax = _minmax
+        vmin=-_minmax,
+        vmax=_minmax,
     )
     _ax2.set_title("Delta", fontsize=11)
     _ax2.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
@@ -669,11 +675,16 @@ def _(
             u_aniso=_base.u_aniso.copy(),
             pbc=_base.pbc.copy(),
         )
-        _scaled_descriptors.append(descriptor(_scaled, params=_params,
-                                              l2=l2_normalisation_cb.value,
-                                              log1p=log1p_compression_cb.value,
-                                              structure_factor_type=norm_dd.value,
-                                              form_factor_type=ff_dd.value).T.ravel())
+        _scaled_descriptors.append(
+            descriptor(
+                _scaled,
+                params=_params,
+                l2=l2_normalisation_cb.value,
+                log1p=log1p_compression_cb.value,
+                structure_factor_type=norm_dd.value,
+                form_factor_type=ff_dd.value,
+            ).T.ravel()
+        )
 
     _descriptor_matrix = np.stack(_scaled_descriptors, axis=0)
 
@@ -681,11 +692,12 @@ def _(
 
     _distance_metric = _distance.correlation
 
-    _distances = [float(_distance_metric(_descriptor,
-                                         _descriptor_matrix[0])) for _descriptor in
-                                         _descriptor_matrix]
+    _distances = [
+        float(_distance_metric(_descriptor, _descriptor_matrix[0]))
+        for _descriptor in _descriptor_matrix
+    ]
 
-    _fig, (_ax1, _ax2) = plt.subplots(2,1,figsize=(12, 6))
+    _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
         _descriptor_matrix,
         aspect="auto",
@@ -713,8 +725,8 @@ def _(
         interpolation="nearest",
         cmap="seismic",
         origin="lower",
-        vmin = -_minmax,
-        vmax = _minmax
+        vmin=-_minmax,
+        vmax=_minmax,
     )
     _ax2.set_title("Delta", fontsize=11)
     _ax2.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
@@ -809,8 +821,13 @@ def _(
                 structure_factor_type=norm_dd.value,
                 debug=True,
             )
-            _P = compute_power_spectrum(_refls, params=_params, l2=l2_normalisation_cb.value,
-            log1p=log1p_compression_cb.value, debug=True)
+            _P = compute_power_spectrum(
+                _refls,
+                params=_params,
+                l2=l2_normalisation_cb.value,
+                log1p=log1p_compression_cb.value,
+                debug=True,
+            )
             _vec = power_spectrum_to_vector(_P)
         except Exception as _e:
             _error = str(_e)
@@ -827,6 +844,7 @@ def _(P, P2, compute_error, compute_error2, mo, plt, vec, vec2):
         mo.stop(True)
 
     from scipy.spatial import distance as _distance
+
     _vec = vec
     _vec2 = vec2
     _fig2, _ax = plt.subplots(figsize=(12, 2.5))

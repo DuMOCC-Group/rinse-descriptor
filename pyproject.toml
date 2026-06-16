@@ -1,6 +1,6 @@
 [project]
 name = "rinse-descriptor"
-version = "1.0.2"
+version = "1.0.3"
 description = "Reciprocal-space INvariant Spectral Embedding (RINSE) descriptors for crystalline materials"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,7 +18,6 @@ dependencies = [
     "ase>=3.23.0",
     "numpy>=1.26",
     "gemmi>=0.6.7",
-    "pandas>=3.0.3",
     "scipy>=1.12",
 ]
 
