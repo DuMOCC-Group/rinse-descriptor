@@ -78,7 +78,7 @@ class TestDescriptorShape:
 
     def test_custom_params_shape(self, nacl: object, params: RinseParams) -> None:
         x = descriptor(nacl, params=params)
-        assert x.shape == (params.n_max, params.l_max)
+        assert x.shape == params.descriptor_shape
 
     def test_descriptor_many_shape(self, nacl: object, silicon: object, ylid: object) -> None:
         X = descriptor_many([nacl, silicon, ylid])

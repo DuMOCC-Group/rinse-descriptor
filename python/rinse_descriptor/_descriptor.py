@@ -19,10 +19,10 @@ contributions from odd-l harmonics cancel exactly.  Only even l contribute:
 
 Default parameters:
     n_max = 8  → radial indices 0 … 7
-    l_max = 16  → angular levels: l ∈ {0, 2, 4, …, 30}
+    l_max = 32  → angular levels: l ∈ {0, 2, 4, …, 30}  (16 levels)
     Output: (8, 16) matrix  → flattened to 128-element vector
             axis-0 = radial index n
-            axis-1 = angular level index (l//2)
+            axis-1 = angular level index
 
 Spherical harmonics convention
 -------------------------------
@@ -58,8 +58,21 @@ class RinseParams:
     n_max:
         Number of radial basis functions (n = 0 … n_max-1).  Default 8.
     l_max:
-        Number of angular levels (ℓ = 0, 2, 4, …, 2*(l_max-1)).  Default 16.
-        Total descriptor length = n_max * l_max.
+        Maximum ℓ value (exclusive).  Default 32.
+        When ``include_odd_l=False`` (default), angular levels are the even
+        values ℓ ∈ {l_min, l_min+2, …, l_max-2} and l_min/l_max must be even.
+        When ``include_odd_l=True``, all integers ℓ ∈ {l_min, …, l_max-1}
+        are used and l_min/l_max may be any non-negative integers.
+        Number of levels = l_max - l_min (odd) or (l_max - l_min) // 2 (even).
+    l_min:
+        First angular level to include.  Default 0.
+        Must be even when ``include_odd_l=False``.
+        Set l_min=4 to drop monopolar (ℓ=0) and quadrupolar (ℓ=2) terms.
+    include_odd_l:
+        If *True*, include odd-ℓ spherical harmonics.  Default *False*.
+        Under Friedel's law (centrosymmetric intensity field) odd-ℓ terms
+        cancel exactly, so they are zero for standard diffraction data;
+        enable this only for non-centrosymmetric intensity weightings.
     sin_theta_over_lambda_max:
         Resolution cutoff.  Default 0.6 Å⁻¹ → |G| ≤ 1.2 Å⁻¹.
     radial_basis:
@@ -68,9 +81,20 @@ class RinseParams:
     """
 
     n_max: int = 8
-    l_max: int = 16
+    l_max: int = 32
+    l_min: int = 0
+    include_odd_l: bool = False
     sin_theta_over_lambda_max: float = 0.6
     radial_basis: RadialBasisType = "chebyshev"
+
+    def __post_init__(self) -> None:
+        if not self.include_odd_l:
+            if self.l_max % 2 != 0:
+                raise ValueError(f"l_max must be even when include_odd_l=False, got {self.l_max}")
+            if self.l_min % 2 != 0:
+                raise ValueError(f"l_min must be even when include_odd_l=False, got {self.l_min}")
+        if self.l_min >= self.l_max:
+            raise ValueError(f"l_min ({self.l_min}) must be less than l_max ({self.l_max})")
 
     @property
     def q_max(self) -> float:
@@ -79,18 +103,24 @@ class RinseParams:
 
     @property
     def l_values(self) -> list[int]:
-        """Even ℓ values used."""
-        return [2 * k for k in range(self.l_max)]
+        """ℓ values used, determined by l_min, l_max, and include_odd_l."""
+        step = 1 if self.include_odd_l else 2
+        return list(range(self.l_min, self.l_max, step))
+
+    @property
+    def n_l_levels(self) -> int:
+        """Number of angular levels."""
+        return len(self.l_values)
 
     @property
     def descriptor_length(self) -> int:
         """Total number of elements in the flattened descriptor."""
-        return self.n_max * self.l_max
+        return self.n_max * self.n_l_levels
 
     @property
     def descriptor_shape(self) -> tuple[int, int]:
-        """Shape of the 2-D descriptor matrix (n_max, l_max)."""
-        return (self.n_max, self.l_max)
+        """Shape of the 2-D descriptor matrix (n_max, n_l_levels)."""
+        return (self.n_max, self.n_l_levels)
 
 
 # ---------------------------------------------------------------------------
@@ -271,10 +301,11 @@ def compute_power_spectrum(
 
     Returns
     -------
-    descriptor : (n_max, l_max) float64
-        Power spectrum matrix.  Flatten to 1-D for use as a feature vector.
-        ``descriptor[n, k]`` corresponds to radial order *n* and angular level
-        ℓ = 2*k (k = 0 … l_max-1).
+    descriptor : (n_max, n_l_levels) float64
+        Power spectrum matrix, where n_l_levels = (l_max - l_min) // 2.
+        Flatten to 1-D for use as a feature vector.
+        ``descriptor[n, k]`` corresponds to radial order *n* and
+        ℓ = params.l_values[k].
     """
     if params is None:
         params = RinseParams()
@@ -321,7 +352,7 @@ def compute_power_spectrum(
 
     # --- Accumulate power spectrum ---
     _t = time.perf_counter()
-    P = np.zeros((params.n_max, params.l_max), dtype=np.float64)
+    P = np.zeros((params.n_max, params.n_l_levels), dtype=np.float64)
 
     for k, degree in enumerate(params.l_values):
         Y = sph_cache.get(degree)  # (M, 2l+1)

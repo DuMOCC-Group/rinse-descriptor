@@ -22,7 +22,7 @@ app = marimo.App(width="medium")
 
 
 @app.cell(hide_code=True)
-def _():
+async def _():
     import sys
 
     import marimo as mo
@@ -35,7 +35,6 @@ def _():
         # runtime and falls back to the built-in pure-Python implementation.
         micropip.add_mock_package("gemmi", "0.7.0")
         await micropip.install("rinse-descriptor")
-
     return (mo,)
 
 
@@ -117,8 +116,16 @@ def _(mo):
         start=2,
         stop=64,
         step=2,
-        value=16,
-        label="l_max  (angular levels, ℓ = 0, 2, …, 2·(l_max−1))",
+        value=32,
+        label="l_max  (max ℓ exclusive, ℓ = l_min, l_min+2, …, l_max−2)",
+        show_value=True,
+    )
+    l_min_slider = mo.ui.slider(
+        start=0,
+        stop=8,
+        step=2,
+        value=0,
+        label="l_min  (first angular level included, ℓ ≥ l_min)",
         show_value=True,
     )
     stol_slider = mo.ui.slider(
@@ -146,11 +153,20 @@ def _(mo):
     )
     log1p_compression_cb = mo.ui.checkbox(value=True, label="log1p compression")
     l2_normalisation_cb = mo.ui.checkbox(value=True, label="l2 normalisation")
+    include_odd_l_cb = mo.ui.checkbox(value=False, label="include odd ℓ")
     mo.hstack(
         [
-            mo.vstack([n_max_slider, l_max_slider, stol_slider], gap="0.6rem"),
+            mo.vstack([n_max_slider, l_max_slider, l_min_slider, stol_slider], gap="0.6rem"),
             mo.vstack(
-                [basis_dd, ff_dd, norm_dd, log1p_compression_cb, l2_normalisation_cb], gap="0.6rem"
+                [
+                    basis_dd,
+                    ff_dd,
+                    norm_dd,
+                    log1p_compression_cb,
+                    l2_normalisation_cb,
+                    include_odd_l_cb,
+                ],
+                gap="0.6rem",
             ),
         ],
         gap="3rem",
@@ -159,8 +175,10 @@ def _(mo):
     return (
         basis_dd,
         ff_dd,
+        include_odd_l_cb,
         l2_normalisation_cb,
         l_max_slider,
+        l_min_slider,
         log1p_compression_cb,
         n_max_slider,
         norm_dd,
@@ -177,8 +195,10 @@ def _(
     compute_power_spectrum,
     compute_structure_factors,
     ff_dd,
+    include_odd_l_cb,
     l2_normalisation_cb,
     l_max_slider,
+    l_min_slider,
     log1p_compression_cb,
     n_max_slider,
     norm_dd,
@@ -216,6 +236,8 @@ def _(
             _params = RinseParams(
                 n_max=n_max_slider.value,
                 l_max=l_max_slider.value,
+                l_min=l_min_slider.value,
+                include_odd_l=include_odd_l_cb.value,
                 sin_theta_over_lambda_max=stol_slider.value,
                 radial_basis=basis_dd.value,
             )
@@ -431,7 +453,7 @@ def _(
     for _scale in _scales:
         _scaled = Crystal(
             cell=_base.cell * _scale,
-            positions=_base.positions.copy(),
+            positions=_base.positions * _scale,
             species=_base.species.copy(),
             occupancies=_base.occupancies.copy(),
             u_iso=_base.u_iso.copy(),
@@ -773,8 +795,10 @@ def _(
     compute_power_spectrum,
     compute_structure_factors,
     ff_dd,
+    include_odd_l_cb,
     l2_normalisation_cb,
     l_max_slider,
+    l_min_slider,
     log1p_compression_cb,
     n_max_slider,
     norm_dd,
@@ -811,6 +835,8 @@ def _(
             _params = RinseParams(
                 n_max=n_max_slider.value,
                 l_max=l_max_slider.value,
+                l_min=l_min_slider.value,
+                include_odd_l=include_odd_l_cb.value,
                 sin_theta_over_lambda_max=stol_slider.value,
                 radial_basis=basis_dd.value,
             )
@@ -840,7 +866,8 @@ def _(
 
 @app.cell(hide_code=True)
 def _(P, P2, compute_error, compute_error2, mo, plt, vec, vec2):
-    if (compute_error or compute_error2) or (P is None or P2 is None):        mo.stop(True)
+    if (compute_error or compute_error2) or (P is None or P2 is None):
+        mo.stop(True)
 
     from scipy.spatial import distance as _distance
 
