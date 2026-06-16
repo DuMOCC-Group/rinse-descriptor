@@ -16,11 +16,14 @@ classifiers = [
 ]
 dependencies = [
     "ase>=3.23.0",
-    "gemmi>=0.6.7",
     "numpy>=1.26",
     "pandas>=3.0.3",
     "scipy>=1.12",
 ]
+
+[project.optional-dependencies]
+gemmi = ["gemmi>=0.6.7"]
+
 
 [dependency-groups]
 dev = [
