@@ -399,10 +399,10 @@ def _(
 ):
     if crystal:
         _base = crystal
-    
+
         _scales = np.round(np.arange(0.90, 1.1001, 0.01), 2)
         _params = params
-    
+
         _scaled_descriptors = []
         for _scale in _scales:
             _scaled = Crystal(
@@ -421,17 +421,17 @@ def _(
                                                   structure_factor_type=norm_dd.
                                                   value, form_factor_type=ff_dd.
                                                   value).T.ravel())
-    
+
         _descriptor_matrix = np.stack(_scaled_descriptors, axis=0)
-    
+
         from scipy.spatial import distance as _distance
-    
+
         _distance_metric = _distance.correlation
-    
+
         _distances = [float(_distance_metric(_descriptor, _descriptor_matrix[int(len(_scales)/2)]))
                       for _descriptor
                       in _descriptor_matrix]
-    
+
         _fig, (_ax1, _ax2) = plt.subplots(2,1,figsize=(12, 6))
         _image1 = _ax1.imshow(
             _descriptor_matrix,
@@ -443,14 +443,15 @@ def _(
         _ax1.set_title(" Descriptor across isotropic cell scaling", fontsize=11)
         _ax1.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
         _ax1.set_ylabel("Scale factor (distance)", fontsize=9)
-    
+
         _yticks1 = list(range(0, len(_scales), 2))
         _ax1.set_yticks(_yticks1)
-        _ax1.set_yticklabels([f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1], fontsize=8)
-    
+        _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1]
+        _ax1.set_yticklabels(_ylabels1, fontsize=8)
+
         _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
         _cbar1.set_label("Descriptor value", fontsize=9)
-    
+
         _delta_matrix = np.stack([row - _descriptor_matrix[int(len(_scales)/2)]
                                   for row
                                   in _descriptor_matrix])
@@ -467,16 +468,16 @@ def _(
         _ax2.set_title("Delta", fontsize=11)
         _ax2.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
         _ax2.set_ylabel("Scale factor", fontsize=9)
-    
+
         _yticks2 = list(range(0, len(_scales), 2))
         _ax2.set_yticks(_yticks2)
         _ax2.set_yticklabels([f"{_scales[i]:.2f}x" for i in _yticks2], fontsize=8)
-    
+
         _cbar2 = _fig.colorbar(_image2, ax=_ax2, shrink=0.9)
         _cbar2.set_label("Descriptor value", fontsize=9)
-    
+
         plt.tight_layout()
-    
+
         plt.show()
     return
 
@@ -507,10 +508,10 @@ def _(
 ):
     if crystal:
         _base = crystal
-    
+
         _scales = np.round(np.arange(-0.1, 0.1001, 0.01), 2)
         _params = params
-    
+
         _scaled_descriptors = []
         for _scale in _scales:
             _scaled_cell = np.matmul(_base.cell, np.matrix([[1,_scale,0],[0,1,0],[0,0,1]]))
@@ -531,17 +532,17 @@ def _(
                                                   value,
                                                   form_factor_type=ff_dd.value
                                                   ).T.ravel())
-    
+
         _descriptor_matrix = np.stack(_scaled_descriptors, axis=0)
-    
+
         from scipy.spatial import distance as _distance
-    
+
         _distance_metric = _distance.correlation
-    
+
         _distances = [float(_distance_metric(_descriptor, _descriptor_matrix[int(len(_scales)/2)]))
                       for _descriptor
                       in _descriptor_matrix]
-    
+
         _fig, (_ax1, _ax2) = plt.subplots(2,1,figsize=(12, 6))
         _image1 = _ax1.imshow(
             _descriptor_matrix,
@@ -553,14 +554,15 @@ def _(
         _ax1.set_title(" Descriptor vs cell skewing (distance)", fontsize=11)
         _ax1.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
         _ax1.set_ylabel("Scale factor", fontsize=9)
-    
+
         _yticks1 = list(range(0, len(_scales), 2))
         _ax1.set_yticks(_yticks1)
-        _ax1.set_yticklabels([f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1], fontsize=8)
-    
+        _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1]
+        _ax1.set_yticklabels(_ylabels1, fontsize=8)
+
         _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
         _cbar1.set_label("Descriptor value", fontsize=9)
-    
+
         _delta_matrix = np.stack([row - _descriptor_matrix[int(len(_scales)/2)]
                                   for row
                                   in _descriptor_matrix])
@@ -577,16 +579,16 @@ def _(
         _ax2.set_title("Delta", fontsize=11)
         _ax2.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
         _ax2.set_ylabel("Scale factor", fontsize=9)
-    
+
         _yticks2 = list(range(0, len(_scales), 2))
         _ax2.set_yticks(_yticks2)
         _ax2.set_yticklabels([f"{_scales[i]:.2f}x" for i in _yticks2], fontsize=8)
-    
+
         _cbar2 = _fig.colorbar(_image2, ax=_ax2, shrink=0.9)
         _cbar2.set_label("Descriptor value", fontsize=9)
-    
+
         plt.tight_layout()
-    
+
         plt.show()
     return
 
@@ -616,10 +618,10 @@ def _(
 ):
     if crystal:
         _base = crystal
-    
+
         _scales = np.round(np.arange(0, 1.001, 0.1), 2)
         _params = params
-    
+
         _scaled_descriptors = []
         for _scale in _scales:
             _occupancies = _base.occupancies.copy()
@@ -638,17 +640,17 @@ def _(
                                                   log1p=log1p_compression_cb.value,
                                                   structure_factor_type=norm_dd.value,
                                                   form_factor_type=ff_dd.value).T.ravel())
-    
+
         _descriptor_matrix = np.stack(_scaled_descriptors, axis=0)
-    
+
         from scipy.spatial import distance as _distance
-    
+
         _distance_metric = _distance.correlation
-    
+
         _distances = [float(_distance_metric(_descriptor,
                                              _descriptor_matrix[0])) for _descriptor in
                                              _descriptor_matrix]
-    
+
         _fig, (_ax1, _ax2) = plt.subplots(2,1,figsize=(12, 6))
         _image1 = _ax1.imshow(
             _descriptor_matrix,
@@ -660,14 +662,15 @@ def _(
         _ax1.set_title("Descriptor vs first atom occupancy", fontsize=11)
         _ax1.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
         _ax1.set_ylabel("First atom occupancy (distance)", fontsize=9)
-    
+
         _yticks1 = list(range(0, len(_scales), 2))
         _ax1.set_yticks(_yticks1)
-        _ax1.set_yticklabels([f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1], fontsize=8)
-    
+        _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1]
+        _ax1.set_yticklabels(_ylabels1, fontsize=8)
+
         _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
         _cbar1.set_label("Descriptor value", fontsize=9)
-    
+
         _delta_matrix = np.stack([row - _descriptor_matrix[0] for row in _descriptor_matrix])
         _minmax = max(abs(max(_delta_matrix.ravel())), abs(min(_delta_matrix.ravel())))
         _image2 = _ax2.imshow(
@@ -682,16 +685,16 @@ def _(
         _ax2.set_title("Delta", fontsize=11)
         _ax2.set_xlabel("Descriptor feature index (flattened)", fontsize=9)
         _ax2.set_ylabel("Scale factor", fontsize=9)
-    
+
         _yticks2 = list(range(0, len(_scales), 2))
         _ax2.set_yticks(_yticks2)
         _ax2.set_yticklabels([f"{_scales[i]:.2f}x" for i in _yticks2], fontsize=8)
-    
+
         _cbar2 = _fig.colorbar(_image2, ax=_ax2, shrink=0.9)
         _cbar2.set_label("Descriptor value", fontsize=9)
-    
+
         plt.tight_layout()
-    
+
         plt.show()
     return
 
