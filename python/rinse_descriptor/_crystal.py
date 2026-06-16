@@ -132,15 +132,19 @@ class Crystal:
 
     @classmethod
     def from_cif(cls, path: str) -> Crystal:
-        """Load a structure from a CIF file using gemmi.
+        """Load a structure from a CIF file.
+
+        Uses gemmi when available; falls back to a pure-Python CIF parser
+        (e.g., on WebAssembly / Emscripten platforms where gemmi has no wheel).
 
         The asymmetric unit is expanded to the full unit cell using the space
         group symmetry operations stored in (or inferred from) the CIF.
         """
         try:
             from gemmi import Op, cif, find_spacegroup_by_name, make_small_structure_from_block
-        except ImportError as exc:
-            raise ImportError("gemmi is required to use Crystal.from_cif()") from exc
+        except ImportError:
+            from ._pure_python import crystal_from_cif_pure
+            return crystal_from_cif_pure(path)
 
         doc = cif.read_file(str(path))
         # Use sole_block() when possible; fall back to first block.

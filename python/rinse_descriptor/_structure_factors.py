@@ -123,12 +123,13 @@ def compute_structure_factors(
     b_factors:
         Per-atom isotropic B-factors in Å². *None* → unit B-factors (1 Å²).
     """
+    _gemmi_available = True
+    gemmi_mod: Any = None
     try:
-        import gemmi
-    except ImportError as exc:
-        raise ImportError("gemmi is required for structure factor calculation") from exc
-
-    gemmi_mod: Any = gemmi
+        import gemmi as _gemmi
+        gemmi_mod = _gemmi
+    except ImportError:
+        _gemmi_available = False
 
     ff_type = FormFactorType(form_factor_type)
     sf_type = StructureFactorType(structure_factor_type)
@@ -147,19 +148,21 @@ def compute_structure_factors(
             b_from_u = np.maximum(b_from_u, u_eq_from_aniso * _8pi2)
         b_use = b_from_u if np.any(b_from_u > 0.0) else np.ones(n_atoms, dtype=np.float64)
 
-    # --- Build Gemmi SmallStructure ------------------------------------------
-    _t = time.perf_counter()
-    base_st = getattr(crystal, "gemmi_small_structure", None)
-    if base_st is not None and b_factors is None:
-        st = base_st
-    else:
-        st = _build_small_structure(crystal, b_use, gemmi_mod)
-    if debug:
-        print(
-            f"[rinse_descriptor] sf: build structure:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
-            f"({crystal.n_atoms} atoms)",
-            file=sys.stderr,
-        )
+    # --- Build Gemmi SmallStructure (only needed for gemmi SF calculators) ---
+    st = None
+    if _gemmi_available and ff_type != FormFactorType.UNITY:
+        _t = time.perf_counter()
+        base_st = getattr(crystal, "gemmi_small_structure", None)
+        if base_st is not None and b_factors is None:
+            st = base_st
+        else:
+            st = _build_small_structure(crystal, b_use, gemmi_mod)
+        if debug:
+            print(
+                f"[rinse_descriptor] sf: build structure:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+                f"({crystal.n_atoms} atoms)",
+                file=sys.stderr,
+            )
 
     # --- Enumerate hkl indices -----------------------------------------------
     q_max = 2.0 * sin_theta_over_lambda_max
@@ -182,10 +185,13 @@ def compute_structure_factors(
             np.empty(0, dtype=np.float64),
         )
 
-    # --- Build the Gemmi SF calculator ---------------------------------------
+    # --- Compute F(hkl): gemmi, pure-Python Gaussian, or unity --------------
     _t = time.perf_counter()
     if ff_type == FormFactorType.UNITY:
         F_vals = _calc_unity(crystal, hkl_arr, b_use, recip)
+    elif not _gemmi_available:
+        from ._pure_python import calc_sf_gauss
+        F_vals = calc_sf_gauss(crystal, hkl_arr, recip)
     else:
         calc = _make_calculator(st.cell, ff_type, gemmi_mod)
         F_vals = _calc_gemmi(calc, st, hkl_arr)
