@@ -1,0 +1,58 @@
+[project]
+name = "rinse"
+version = "0.1.0"
+description = "Reciprocal-space INvariant Spectral Embedding (RINSE) descriptors for crystalline materials"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["crystallography", "materials science", "machine learning", "descriptors"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "ase>=3.23.0",
+    "gemmi>=0.6.7",
+    "numpy>=1.26",
+    "pandas>=3.0.3",
+    "scipy>=1.12",
+]
+
+[dependency-groups]
+dev = [
+    "hatchling>=1.25",
+    "pytest>=8.0",
+    "pytest-benchmark>=4.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "marimo>=0.9",
+    "matplotlib>=3.8",
+    "pre-commit>=4.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["python/rinse"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "NPY"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"

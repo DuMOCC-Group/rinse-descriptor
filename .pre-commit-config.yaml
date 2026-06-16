@@ -1,0 +1,35 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-fix
+        name: ruff check --fix (staged files)
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        files: ^(python/|tests/)
+        stages: [pre-commit]
+      - id: ruff-format
+        name: ruff format (staged files)
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        files: ^(python/|tests/)
+        stages: [pre-commit]
+      - id: ruff-check-all
+        name: ruff check (full)
+        entry: uv run ruff check python/ tests/
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: mypy
+        name: mypy (package)
+        entry: uv run mypy python/rinse/
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: pytest
+        name: pytest (suite)
+        entry: sh -c 'PYTHONPATH=python uv run pytest tests/ -v --tb=short'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
