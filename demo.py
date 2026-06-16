@@ -264,6 +264,8 @@ def _(
     P = _P
     vec = _vec
     compute_error = _error
+    if compute_error:
+        print(compute_error)
     return P, compute_error, crystal, os, params, tempfile, vec
 
 
