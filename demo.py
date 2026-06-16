@@ -840,8 +840,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(P, P2, compute_error, compute_error2, mo, plt, vec, vec2):
-    if (compute_error or compute_error2) or (P.all() or P2.all()) is None:
-        mo.stop(True)
+    if (compute_error or compute_error2) or (P is None or P2 is None):        mo.stop(True)
 
     from scipy.spatial import distance as _distance
 
