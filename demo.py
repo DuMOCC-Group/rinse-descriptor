@@ -40,6 +40,7 @@ async def _():
 
 @app.cell(hide_code=True)
 def _():
+    import dataclasses
     import matplotlib.pyplot as plt
     import numpy as np
     from rinse_descriptor import (
@@ -58,6 +59,7 @@ def _():
         RinseParams,
         compute_power_spectrum,
         compute_structure_factors,
+        dataclasses,
         descriptor,
         descriptor_hash,
         np,
@@ -143,11 +145,8 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(DEFAULT_HASH_WORDS, RinseParams, mo):
-    import dataclasses
-
-    _p = dataclasses.fields(RinseParams)
-    _defaults = {f.name: f.default for f in _p}
+def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
+    _defaults = dataclasses.asdict(RinseParams())
 
     n_max_slider = mo.ui.slider(
         start=2,
@@ -509,6 +508,7 @@ def _(
     P,
     compute_error,
     crystal,
+    dataclasses,
     descriptor,
     ff_dd,
     l2_normalisation_cb,
@@ -524,8 +524,6 @@ def _(
     _base = crystal
 
     _scales = np.round(np.arange(0.90, 1.1001, 0.01), 2)
-    import dataclasses
-
     _params = dataclasses.replace(
         params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
     )
@@ -628,6 +626,7 @@ def _(
     P,
     compute_error,
     crystal,
+    dataclasses,
     descriptor,
     ff_dd,
     l2_normalisation_cb,
@@ -644,8 +643,6 @@ def _(
     _base = crystal
 
     _scales = np.round(np.arange(-0.1, 0.1001, 0.01), 2)
-    import dataclasses
-
     _params = dataclasses.replace(
         params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
     )
@@ -748,6 +745,7 @@ def _(
     P,
     compute_error,
     crystal,
+    dataclasses,
     descriptor,
     ff_dd,
     l2_normalisation_cb,
@@ -763,8 +761,6 @@ def _(
     _base = crystal
 
     _scales = np.round(np.arange(0, 1.001, 0.1), 2)
-    import dataclasses
-
     _params = dataclasses.replace(
         params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
     )
