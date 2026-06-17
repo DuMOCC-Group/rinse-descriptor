@@ -42,7 +42,7 @@ async def _():
 def _():
     import matplotlib.pyplot as plt
     import numpy as np
-    from rinse_descriptor import Crystal, RinseParams, descriptor
+    from rinse_descriptor import Crystal, RinseParams, descriptor, descriptor_hash
     from rinse_descriptor._descriptor import compute_power_spectrum, power_spectrum_to_vector
     from rinse_descriptor._structure_factors import compute_structure_factors
 
@@ -52,6 +52,7 @@ def _():
         compute_power_spectrum,
         compute_structure_factors,
         descriptor,
+        descriptor_hash,
         np,
         plt,
         power_spectrum_to_vector,
@@ -186,6 +187,14 @@ def _(mo):
     log1p_compression_cb = mo.ui.checkbox(value=True, label="log1p compression")
     l2_normalisation_cb = mo.ui.checkbox(value=True, label="l2 normalisation")
     include_odd_l_cb = mo.ui.checkbox(value=False, label="include odd ℓ")
+    n_words_slider = mo.ui.slider(
+        start=1,
+        stop=10,
+        step=1,
+        value=5,
+        label="hash words  (each word = 16 bits)",
+        show_value=True,
+    )
     mo.hstack(
         [
             mo.vstack([n_max_slider, l_max_slider, l_min_slider, stol_slider], gap="0.6rem"),
@@ -197,6 +206,7 @@ def _(mo):
                     log1p_compression_cb,
                     l2_normalisation_cb,
                     include_odd_l_cb,
+                    n_words_slider,
                 ],
                 gap="0.6rem",
             ),
@@ -213,6 +223,7 @@ def _(mo):
         l_min_slider,
         log1p_compression_cb,
         n_max_slider,
+        n_words_slider,
         norm_dd,
         stol_slider,
     )
@@ -381,6 +392,25 @@ def _(P, compute_error, mo, np):
     | Mean | {float(_vec.mean()):.6g} |
     | L2 norm | {float(np.linalg.norm(_vec)):.6g} |
     | Sparsity | {100.0 * float(np.mean(_vec == 0)):.1f}% |
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(P, compute_error, descriptor_hash, mo, n_words_slider, vec):
+    if compute_error or P is None:
+        mo.stop(True)
+
+    _hash = descriptor_hash(vec, n_words=n_words_slider.value)
+    _n_bits = n_words_slider.value * 16
+    mo.md(f"""
+    ### Descriptor hash
+
+    | | |
+    |---|---|
+    | Hash | `{_hash}` |
+    | Words | {n_words_slider.value} |
+    | Bits | {_n_bits} |
     """)
     return
 
