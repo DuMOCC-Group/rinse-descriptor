@@ -34,7 +34,6 @@ async def _():
         # rinse-descriptor's dependencies. Our code detects the stub at
         # runtime and falls back to the built-in pure-Python implementation.
         micropip.add_mock_package("gemmi", "0.7.0")
-        await micropip.install("rinse-descriptor")
     return (mo,)
 
 
