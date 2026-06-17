@@ -9,10 +9,12 @@ import pytest
 from rinse_descriptor import Crystal, descriptor, descriptor_hash, hash_to_bits
 from rinse_descriptor._hash import (
     _BITS_PER_WORD,
+    _BLOCKED_WORDS,
     _CONSONANTS,
     _VOWELS,
     _int16_to_proquint,
     _proquint_to_int16,
+    _sanitise_word,
 )
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -191,3 +193,40 @@ class TestHashToBits:
         b1 = hash_to_bits(descriptor_hash(nacl_vec))
         b2 = hash_to_bits(descriptor_hash(si_vec))
         assert not np.array_equal(b1, b2)
+
+
+# ---------------------------------------------------------------------------
+# Blocklist / sanitisation
+# ---------------------------------------------------------------------------
+
+
+class TestBlocklist:
+    def test_blocked_words_replaced(self) -> None:
+        for word in _BLOCKED_WORDS:
+            assert _sanitise_word(word) != word
+
+    def test_replacement_is_valid_proquint(self) -> None:
+        for word in _BLOCKED_WORDS:
+            replacement = _sanitise_word(word)
+            assert len(replacement) == 5
+            assert replacement[0] in _CONSONANTS
+            assert replacement[1] in _VOWELS
+            assert replacement[2] in _CONSONANTS
+            assert replacement[3] in _VOWELS
+            assert replacement[4] in _CONSONANTS
+
+    def test_replacement_not_in_blocklist(self) -> None:
+        for word in _BLOCKED_WORDS:
+            assert _sanitise_word(word) not in _BLOCKED_WORDS
+
+    def test_no_blocked_word_in_hash_output(self) -> None:
+        rng = np.random.default_rng(42)
+        for _ in range(200):
+            vec = rng.standard_normal(128)
+            words = descriptor_hash(vec, n_words=8).split("-")
+            for word in words:
+                assert word not in _BLOCKED_WORDS, f"Blocked word {word!r} appeared in hash"
+
+    def test_non_blocked_word_unchanged(self) -> None:
+        safe = "babab"
+        assert _sanitise_word(safe) == safe

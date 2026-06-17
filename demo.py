@@ -22,9 +22,10 @@ app = marimo.App(width="medium")
 
 
 @app.cell(hide_code=True)
-async def _():
+def _():
     import sys
     import marimo as mo
+
     return (mo,)
 
 
@@ -75,24 +76,6 @@ def _(mo):
     the parameters below.
     """)
     return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md("""
-    ## Structure input
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    cif_upload = mo.ui.file(
-        filetypes=[".cif"],
-        label="Upload CIF file",
-    )
-    cif_upload
-    return (cif_upload,)
 
 
 @app.cell(hide_code=True)
@@ -232,6 +215,24 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
 
 
 @app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    ## Structure input
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    cif_upload = mo.ui.file(
+        filetypes=[".cif"],
+        label="Upload CIF file",
+    )
+    cif_upload
+    return (cif_upload,)
+
+
+@app.cell(hide_code=True)
 def _(
     Crystal,
     RinseParams,
@@ -325,14 +326,14 @@ def _(P, compute_error, mo, plt):
 
     # Panel 1 – heatmap
     _ax = _axes[0]
-    _im = _ax.imshow(P, origin="lower", aspect="auto", cmap="inferno", interpolation="nearest")
-    _ax.set_xlabel("Angular level k  (ℓ = 2k)", fontsize=9)
-    _ax.set_ylabel("Radial order n", fontsize=9)
+    _im = _ax.imshow(P.T, origin="lower", aspect="auto", cmap="inferno", interpolation="nearest")
+    _ax.set_ylabel("Angular level k  (ℓ = 2k)", fontsize=9)
+    _ax.set_xlabel("Radial order n", fontsize=9)
     _ax.set_title("Descriptor matrix  p(n, ℓ)", fontsize=10)
     _n_l = P.shape[1]
     _kticks = list(range(0, _n_l, max(1, _n_l // 8)))
-    _ax.set_xticks(_kticks)
-    _ax.set_xticklabels([str(2 * k) for k in _kticks], fontsize=7)
+    _ax.set_yticks(_kticks)
+    _ax.set_yticklabels([str(2 * k) for k in _kticks], fontsize=7)
     plt.colorbar(_im, ax=_ax, shrink=0.85)
 
     # Panel 2 – radial & angular profiles
@@ -936,7 +937,18 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(P, P2, compute_error, compute_error2, mo, plt, vec, vec2):
+def _(
+    P,
+    P2,
+    compute_error,
+    compute_error2,
+    descriptor_hash,
+    mo,
+    n_words_slider,
+    plt,
+    vec,
+    vec2,
+):
     if (compute_error or compute_error2) or (P is None or P2 is None):
         mo.stop(True)
 
@@ -957,6 +969,7 @@ def _(P, P2, compute_error, compute_error2, mo, plt, vec, vec2):
     _ax.set_xlim(0, len(_vec) - 1)
     # plt.yscale('log')
     plt.tight_layout()
+    print(f"Crystal 1: {descriptor_hash(vec, n_words=n_words_slider.value)}\nCrystal 2: {descriptor_hash(vec2, n_words=n_words_slider.value)}")
     _fig2
     return
 

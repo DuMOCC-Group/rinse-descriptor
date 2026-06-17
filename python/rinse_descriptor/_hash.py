@@ -44,7 +44,7 @@ _VOWELS = "aiou"  # 4 characters → 2-bit index
 _BITS_PER_WORD = 16
 
 #: Default number of proquint words produced by :func:`descriptor_hash`.
-DEFAULT_HASH_WORDS = 5
+DEFAULT_HASH_WORDS = 1
 
 
 def _int16_to_proquint(n: int) -> str:
@@ -70,8 +70,35 @@ def _proquint_to_int16(word: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Offensive-word blocklist
 # ---------------------------------------------------------------------------
+# Any proquint word appearing in this set is replaced by flipping its LSB,
+# yielding a different valid proquint that is not a recognisable word.
+# All entries must be exactly 5 characters using the proquint alphabet.
+_BLOCKED_WORDS: frozenset[str] = frozenset(
+    [
+        "fagot",
+        "fagit",
+        "fagut",
+        "fagor",
+        "jihad",
+        "nudif",
+    ]
+)
+
+
+def _sanitise_word(word: str) -> str:
+    """Replace a blocked proquint word by incrementing its value until clean."""
+    if word not in _BLOCKED_WORDS:
+        return word
+    value = _proquint_to_int16(word)
+    replacement = word
+    shift = 1
+    while replacement in _BLOCKED_WORDS:
+        replacement = _int16_to_proquint((value ^ shift) & 0xFFFF)
+        shift <<= 1
+    return replacement
+
 
 
 def descriptor_hash(
@@ -118,7 +145,7 @@ def descriptor_hash(
         # Pack 16 bools into a uint16 (big-endian: first bit is MSB)
         raw = np.packbits(chunk)  # 2 bytes
         value = (int(raw[0]) << 8) | int(raw[1])
-        words.append(_int16_to_proquint(value))
+        words.append(_sanitise_word(_int16_to_proquint(value)))
 
     return "-".join(words)
 
