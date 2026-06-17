@@ -4,7 +4,7 @@
 #     "marimo>=0.23.9",
 #     "matplotlib",
 #     "numpy",
-#     "rinse-descriptor",
+#     "rinse-descriptor==1.0.7",
 # ]
 # ///
 """RINSE Descriptor Demo – marimo notebook.
