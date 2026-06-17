@@ -4,7 +4,7 @@
 #     "marimo>=0.23.9",
 #     "matplotlib",
 #     "numpy",
-#     "rinse-descriptor==1.0.7",
+#     "rinse-descriptor @ git+https://github.com/DuMOCC-Group/rinse-descriptor.git",
 # ]
 # ///
 """RINSE Descriptor Demo – marimo notebook.
