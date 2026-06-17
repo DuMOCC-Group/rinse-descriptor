@@ -34,6 +34,25 @@ async def _():
         # rinse-descriptor's dependencies. Our code detects the stub at
         # runtime and falls back to the built-in pure-Python implementation.
         micropip.add_mock_package("gemmi", "0.7.0")
+        await micropip.install(
+            "rinse-descriptor @ https://github.com/DuMOCC-Group/rinse-descriptor/archive/refs/heads/main.zip"
+        )
+    else:
+        try:
+            import rinse_descriptor  # noqa: F401
+        except ModuleNotFoundError:
+            import subprocess
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "git+https://github.com/DuMOCC-Group/rinse-descriptor.git",
+                ],
+                check=True,
+            )
     return (mo,)
 
 
