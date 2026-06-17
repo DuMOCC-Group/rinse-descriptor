@@ -21,6 +21,9 @@ dependencies = [
     "scipy>=1.12",
 ]
 
+[project.scripts]
+rinse = "rinse_descriptor._cli:main"
+
 [dependency-groups]
 dev = [
     "hatchling>=1.25",

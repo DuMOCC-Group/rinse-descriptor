@@ -5,8 +5,8 @@ Quick start
 >>> from ase.build import bulk
 >>> from rinse_descriptor import descriptor, RinseParams
 >>> atoms = bulk("NaCl", "rocksalt", a=5.64)
->>> x = descriptor(atoms)           # (n_max, n_l_levels) ndarray by default
->>> x.shape == RinseParams().descriptor_shape
+>>> x = descriptor(atoms)           # 1-D vector by default
+>>> x.shape == (RinseParams().descriptor_length,)
 True
 
 >>> X = descriptor_many([atoms, atoms])
@@ -62,9 +62,6 @@ def descriptor(
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron", "unity"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
     b_factors: NDArray[np.float64] | None = None,
-    flatten: bool = False,
-    l2: bool = True,
-    log1p: bool = True,
     debug: bool = False,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a single structure.
@@ -77,24 +74,20 @@ def descriptor(
     params:
         Descriptor hyper-parameters.  Uses :class:`RinseParams` defaults if *None*
         (see :class:`RinseParams` for current values).
+        ``params.log1p`` and ``params.l2`` control post-processing normalisation.
+        ``params.flatten`` controls whether the output is a 1-D vector (default *True*)
+        or the 2-D ``(n_max, n_l_levels)`` matrix.
     form_factor_type:
         ``"xray"`` | ``"electron"`` | ``"neutron"`` | ``"unity"``.
     structure_factor_type:
         ``"F2"`` (default) | ``"F"``.
     b_factors:
         Per-atom isotropic B-factors in Å².  *None* → unit B-factors (1 Å²).
-    flatten:
-        If *True*, return a 1-D vector of length ``n_max * n_l_levels`` instead
-        of the 2-D ``(n_max, n_l_levels)`` matrix.
-    l2:
-        If *True*, apply L2 normalization to the descriptor vector.
-    log1p:
-        If *True*, apply log1p compression to the descriptor vector.
 
     Returns
     -------
-    ndarray of shape ``(n_max, n_l_levels)`` [default] or
-    ``(n_max * n_l_levels,)`` [flatten=True].
+    ndarray of shape ``(n_max * n_l_levels,)`` [default, flatten=True] or
+    ``(n_max, n_l_levels)`` [flatten=False].
     """
     import pathlib
 
@@ -137,7 +130,7 @@ def descriptor(
         )
 
     _t = time.perf_counter()
-    P = compute_power_spectrum(reflections, params=params, debug=debug, l2=l2, log1p=log1p)
+    P = compute_power_spectrum(reflections, params=params, debug=debug)
     if debug:
         print(
             f"[rinse_descriptor]   power spectrum:     {(time.perf_counter() - _t) * 1e3:8.2f} ms",
@@ -148,7 +141,7 @@ def descriptor(
             file=sys.stderr,
         )
 
-    return power_spectrum_to_vector(P) if flatten else P
+    return power_spectrum_to_vector(P) if params.flatten else P
 
 
 def descriptor_many(
@@ -158,8 +151,6 @@ def descriptor_many(
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron", "unity"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
     flatten: bool = False,
-    l2: bool = True,
-    log1p: bool = True,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a list of structures.
 
@@ -169,14 +160,16 @@ def descriptor_many(
         Iterable of :class:`ase.Atoms`, :class:`~rinse_descriptor.Crystal`, or CIF paths.
     params:
         Shared descriptor hyper-parameters.
+        ``params.log1p`` and ``params.l2`` control post-processing normalisation.
     form_factor_type, structure_factor_type:
         Passed to :func:`descriptor`.
     flatten:
-        If *True*, return shape (N, n_max*l_max); otherwise (N, n_max, l_max).
+        If *True*, return shape (N, n_max*n_l_levels); otherwise (N, n_max, n_l_levels).
 
     Returns
     -------
-    ndarray of shape (N, n_max, l_max) [default] or (N, n_max*l_max) [flatten=True].
+    ndarray of shape (N, n_max*n_l_levels) [default, flatten=True] or
+    (N, n_max, n_l_levels) [flatten=False].
     """
     results = [
         descriptor(
@@ -184,9 +177,6 @@ def descriptor_many(
             params=params,
             form_factor_type=form_factor_type,
             structure_factor_type=structure_factor_type,
-            l2=l2,
-            log1p=log1p,
-            flatten=flatten,
         )
         for s in structures
     ]

@@ -74,6 +74,16 @@ class RinseParams:
         cancel exactly, so they are zero for standard computed diffraction
         data; enable this only for assignment of absolute structure with
         more sophisticated structure factor calculation.
+    log1p:
+        Apply log1p compression to the raw power spectrum.  Default *False*.
+        Reduces dynamic range; can be useful when monopoles are included.
+    l2:
+        Apply global L2 normalisation.  Default *True*.
+        Puts all descriptor vectors on a common scale.
+    flatten:
+        If *True* (default), :func:`~rinse_descriptor.descriptor` returns a
+        flat 1-D vector of length ``n_max * n_l_levels``.  If *False*, returns
+        the 2-D ``(n_max, n_l_levels)`` matrix.
     sin_theta_over_lambda_max:
         Resolution cutoff.  Default 0.6 Å⁻¹ → |G| ≤ 1.2 Å⁻¹.
     radial_basis:
@@ -87,6 +97,9 @@ class RinseParams:
     include_odd_l: bool = False
     sin_theta_over_lambda_max: float = 0.6
     radial_basis: RadialBasisType = "smooth_shells_nl"
+    log1p: bool = False
+    l2: bool = True
+    flatten: bool = True
 
     def __post_init__(self) -> None:
         if not self.include_odd_l:
@@ -283,8 +296,6 @@ def compute_power_spectrum(
     params: RinseParams | None = None,
     *,
     debug: bool = False,
-    log1p: bool = True,
-    l2: bool = True,
 ) -> NDArray[np.float64]:
     """Compute the RINSE power spectrum from a :class:`ReflectionList`.
 
@@ -295,10 +306,7 @@ def compute_power_spectrum(
         :func:`~rinse_descriptor._structure_factors.compute_structure_factors`.
     params:
         Descriptor hyper-parameters.  Uses defaults if *None*.
-    log1p:
-        Apply log1p normalisation to the raw power spectrum before L2 normalisation.
-    l2:
-        Apply global L2 normalisation to the log1p power spectrum.
+        ``params.log1p`` and ``params.l2`` control post-processing.
 
     Returns
     -------
@@ -372,11 +380,11 @@ def compute_power_spectrum(
         )
 
     _t = time.perf_counter()
-    result = normalise_power_spectrum(P, log1p=log1p, l2=l2)
+    result = normalise_power_spectrum(P, log1p=params.log1p, l2=params.l2)
     if debug:
         print(
             f"[rinse_descriptor] ps: normalise:        {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
-            f"(method='{'log1p+' if log1p else ''}{'l2' if l2 else ''}')",
+            f"(method='{'log1p+' if params.log1p else ''}{'l2' if params.l2 else ''}')",
             file=sys.stderr,
         )
     return result

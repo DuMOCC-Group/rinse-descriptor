@@ -21,13 +21,13 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 @pytest.fixture(scope="module")
 def nacl_vec() -> np.ndarray:
     c = Crystal.from_cif(FIXTURES_DIR / "nacl.cif")
-    return descriptor(c, flatten=True)
+    return descriptor(c)
 
 
 @pytest.fixture(scope="module")
 def si_vec() -> np.ndarray:
     c = Crystal.from_cif(FIXTURES_DIR / "si.cif")
-    return descriptor(c, flatten=True)
+    return descriptor(c)
 
 
 # ---------------------------------------------------------------------------

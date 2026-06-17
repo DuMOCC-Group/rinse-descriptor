@@ -7,7 +7,7 @@ Structures tested:
   - 1-Methylpiperazinium oxalate dihydrate
 
 Properties verified:
-  - Descriptor shape: (8, 16) by default, 128 when flattened
+  - Descriptor shape: 128 elements by default (flat 1-D), (8, 16) when flatten=False
   - Translation invariance: shifting all atoms by a vector leaves descriptor unchanged
   - Atom-order invariance: permuting atoms leaves descriptor unchanged (within rounding)
   - Consistency: two calls with identical input return identical output
@@ -49,8 +49,8 @@ def ylid() -> object:
 
 @pytest.fixture(scope="module")
 def params() -> RinseParams:
-    # Use small n_max/l_max for speed in unit tests; shape is still tested
-    return RinseParams(n_max=8, l_max=8, sin_theta_over_lambda_max=1.0)
+    # Use small n_max/l_max for speed in unit tests; flatten=False for shape comparisons
+    return RinseParams(n_max=8, l_max=8, sin_theta_over_lambda_max=1.0, flatten=False)
 
 
 # ---------------------------------------------------------------------------
@@ -61,32 +61,38 @@ def params() -> RinseParams:
 class TestDescriptorShape:
     def test_default_shape_nacl(self, nacl: object) -> None:
         x = descriptor(nacl)
-        assert x.shape == (8, 16), f"Expected (8, 16), got {x.shape}"
+        assert x.ndim == 1, f"Expected 1-D vector, got shape {x.shape}"
+        assert x.shape[0] == RinseParams().descriptor_length
 
     def test_default_shape_silicon(self, silicon: object) -> None:
         x = descriptor(silicon)
-        assert x.shape == (8, 16), f"Expected (8, 16), got {x.shape}"
+        assert x.ndim == 1
+        assert x.shape[0] == RinseParams().descriptor_length
 
     def test_default_shape_ylid(self, ylid: object) -> None:
         x = descriptor(ylid)
-        assert x.shape == (8, 16), f"Expected (8, 16), got {x.shape}"
-
-    def test_flattened_length(self, nacl: object) -> None:
-        x = descriptor(nacl, flatten=True)
         assert x.ndim == 1
-        assert x.shape[0] == 128
+        assert x.shape[0] == RinseParams().descriptor_length
+
+    def test_matrix_shape_with_flatten_false(self, nacl: object) -> None:
+        params = RinseParams(flatten=False)
+        x = descriptor(nacl, params=params)
+        assert x.shape == params.descriptor_shape
 
     def test_custom_params_shape(self, nacl: object, params: RinseParams) -> None:
+        # params fixture has flatten=False
         x = descriptor(nacl, params=params)
         assert x.shape == params.descriptor_shape
 
     def test_descriptor_many_shape(self, nacl: object, silicon: object, ylid: object) -> None:
-        X = descriptor_many([nacl, silicon, ylid])
+        params = RinseParams(flatten=False)
+        X = descriptor_many([nacl, silicon, ylid], params=params)
         assert X.shape == (3, 8, 16), f"Expected (3, 8, 16), got {X.shape}"
 
-    def test_descriptor_many_flattened(self, nacl: object, silicon: object) -> None:
-        X = descriptor_many([nacl, silicon], flatten=True)
-        assert X.shape == (2, 128), f"Expected (2, 128), got {X.shape}"
+    def test_descriptor_many_flat_default(self, nacl: object, silicon: object) -> None:
+        X = descriptor_many([nacl, silicon])
+        default_len = RinseParams().descriptor_length
+        assert X.shape == (2, default_len), f"Expected (2, {default_len}), got {X.shape}"
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +388,7 @@ class TestAdditionalInvariances:
             n_max=8,
             l_max=8,
             sin_theta_over_lambda_max=1.0,
+            flatten=False,
         )
 
         atoms_super = nacl.repeat((2, 2, 2))
@@ -395,6 +402,7 @@ class TestAdditionalInvariances:
             n_max=8,
             l_max=8,
             sin_theta_over_lambda_max=1.0,
+            flatten=False,
         )
         crystal = Crystal.from_ase(silicon)
         reflections = compute_structure_factors(
@@ -417,11 +425,13 @@ class TestAdditionalInvariances:
         p_perm = compute_power_spectrum(reflections_perm, params=params)
         np.testing.assert_allclose(p_ref, p_perm, rtol=1e-12, atol=1e-12)
 
-    def test_intensity_scaling_changes_values_but_keeps_l2_scale(self, ylid: object) -> None:
+    def test_intensity_scaling_invariant(self, ylid: object) -> None:
         params = RinseParams(
             n_max=8,
             l_max=8,
             sin_theta_over_lambda_max=1.0,
+            flatten=False,
+            log1p=False,
         )
         crystal = Crystal.from_ase(ylid)
         reflections = compute_structure_factors(
@@ -441,15 +451,14 @@ class TestAdditionalInvariances:
 
         p_ref = compute_power_spectrum(reflections, params=params)
         p_scaled = compute_power_spectrum(reflections_scaled, params=params)
-        assert not np.allclose(p_scaled, p_ref, rtol=1e-4, atol=1e-8)
-        assert np.isclose(np.linalg.norm(p_ref), 1.0, rtol=1e-10, atol=1e-12)
-        assert np.isclose(np.linalg.norm(p_scaled), 1.0, rtol=1e-10, atol=1e-12)
+        assert np.allclose(p_scaled, p_ref, rtol=1e-4, atol=1e-8)
 
     def test_atom_substitution_changes_descriptor(self, nacl: object) -> None:
         params = RinseParams(
             n_max=8,
             l_max=8,
             sin_theta_over_lambda_max=1.0,
+            flatten=False,
         )
 
         x_ref = descriptor(nacl, params=params, structure_factor_type="F2")

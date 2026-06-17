@@ -1,9 +1,10 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
+#     "marimo>=0.23.9",
 #     "matplotlib",
 #     "numpy",
-#     "rinse-descriptor"
+#     "rinse-descriptor",
 # ]
 # ///
 """RINSE Descriptor Demo – marimo notebook.
@@ -195,8 +196,8 @@ def _(DEFAULT_HASH_WORDS, RinseParams, mo):
         value="F2",
         label="Structure factor type",
     )
-    log1p_compression_cb = mo.ui.checkbox(value=True, label="log1p compression")
-    l2_normalisation_cb = mo.ui.checkbox(value=True, label="l2 normalisation")
+    log1p_compression_cb = mo.ui.checkbox(value=_defaults["log1p"], label="log1p compression")
+    l2_normalisation_cb = mo.ui.checkbox(value=_defaults["l2"], label="l2 normalisation")
     include_odd_l_cb = mo.ui.checkbox(value=_defaults["include_odd_l"], label="include odd ℓ")
     n_words_slider = mo.ui.slider(
         start=1,
@@ -294,6 +295,9 @@ def _(
                 include_odd_l=include_odd_l_cb.value,
                 sin_theta_over_lambda_max=stol_slider.value,
                 radial_basis=basis_dd.value,
+                log1p=log1p_compression_cb.value,
+                l2=l2_normalisation_cb.value,
+                flatten=False,
             )
             _refls = compute_structure_factors(
                 _crystal,
@@ -305,8 +309,6 @@ def _(
             _P = compute_power_spectrum(
                 _refls,
                 params=_params,
-                l2=l2_normalisation_cb.value,
-                log1p=log1p_compression_cb.value,
                 debug=True,
             )
             _vec = power_spectrum_to_vector(_P)
@@ -522,7 +524,11 @@ def _(
     _base = crystal
 
     _scales = np.round(np.arange(0.90, 1.1001, 0.01), 2)
-    _params = params
+    import dataclasses
+
+    _params = dataclasses.replace(
+        params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
+    )
 
     _scaled_descriptors = []
     for _scale in _scales:
@@ -539,8 +545,6 @@ def _(
             descriptor(
                 _scaled,
                 params=_params,
-                l2=l2_normalisation_cb.value,
-                log1p=log1p_compression_cb.value,
                 structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
             ).T.ravel()
@@ -640,7 +644,11 @@ def _(
     _base = crystal
 
     _scales = np.round(np.arange(-0.1, 0.1001, 0.01), 2)
-    _params = params
+    import dataclasses
+
+    _params = dataclasses.replace(
+        params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
+    )
 
     _scaled_descriptors = []
     for _scale in _scales:
@@ -658,8 +666,6 @@ def _(
             descriptor(
                 _scaled,
                 params=_params,
-                l2=l2_normalisation_cb.value,
-                log1p=log1p_compression_cb.value,
                 structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
             ).T.ravel()
@@ -757,7 +763,11 @@ def _(
     _base = crystal
 
     _scales = np.round(np.arange(0, 1.001, 0.1), 2)
-    _params = params
+    import dataclasses
+
+    _params = dataclasses.replace(
+        params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
+    )
 
     _scaled_descriptors = []
     for _scale in _scales:
@@ -776,8 +786,6 @@ def _(
             descriptor(
                 _scaled,
                 params=_params,
-                l2=l2_normalisation_cb.value,
-                log1p=log1p_compression_cb.value,
                 structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
             ).T.ravel()
@@ -914,6 +922,9 @@ def _(
                 include_odd_l=include_odd_l_cb.value,
                 sin_theta_over_lambda_max=stol_slider.value,
                 radial_basis=basis_dd.value,
+                log1p=log1p_compression_cb.value,
+                l2=l2_normalisation_cb.value,
+                flatten=False,
             )
             _refls = compute_structure_factors(
                 _crystal,
@@ -925,8 +936,6 @@ def _(
             _P = compute_power_spectrum(
                 _refls,
                 params=_params,
-                l2=l2_normalisation_cb.value,
-                log1p=log1p_compression_cb.value,
                 debug=True,
             )
             _vec = power_spectrum_to_vector(_P)
