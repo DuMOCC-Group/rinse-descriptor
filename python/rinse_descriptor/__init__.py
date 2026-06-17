@@ -29,6 +29,7 @@ from ._descriptor import (
     normalise_power_spectrum,
     power_spectrum_to_vector,
 )
+from ._hash import descriptor_hash, hash_to_bits
 from ._structure_factors import (
     FormFactorType,
     ReflectionList,
@@ -48,6 +49,8 @@ __all__ = [
     "normalise_power_spectrum",
     "descriptor",
     "descriptor_many",
+    "descriptor_hash",
+    "hash_to_bits",
 ]
 
 
