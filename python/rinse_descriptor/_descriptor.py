@@ -65,27 +65,28 @@ class RinseParams:
         are used and l_min/l_max may be any non-negative integers.
         Number of levels = l_max - l_min (odd) or (l_max - l_min) // 2 (even).
     l_min:
-        First angular level to include.  Default 0.
+        First angular level to include.  Default 4.
         Must be even when ``include_odd_l=False``.
         Set l_min=4 to drop monopolar (ℓ=0) and quadrupolar (ℓ=2) terms.
     include_odd_l:
         If *True*, include odd-ℓ spherical harmonics.  Default *False*.
-        Under Friedel's law (centrosymmetric intensity field) odd-ℓ terms
-        cancel exactly, so they are zero for standard diffraction data;
-        enable this only for non-centrosymmetric intensity weightings.
+        Under Friedel's law odd-ℓ terms
+        cancel exactly, so they are zero for standard computed diffraction
+        data; enable this only for assignment of absolute structure with
+        more sophisticated structure factor calculation.
     sin_theta_over_lambda_max:
         Resolution cutoff.  Default 0.6 Å⁻¹ → |G| ≤ 1.2 Å⁻¹.
     radial_basis:
-        ``"chebyshev"`` (default), ``"bessel"``, or
-        ``"smooth_shells_cw"``/``"smooth_shells_nl"``.
+        ``"chebyshev"`` , ``"bessel"`` or
+        ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
     """
 
     n_max: int = 8
-    l_max: int = 32
-    l_min: int = 0
+    l_max: int = 36
+    l_min: int = 4
     include_odd_l: bool = False
     sin_theta_over_lambda_max: float = 0.6
-    radial_basis: RadialBasisType = "chebyshev"
+    radial_basis: RadialBasisType = "smooth_shells_nl"
 
     def __post_init__(self) -> None:
         if not self.include_odd_l:

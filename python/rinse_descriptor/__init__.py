@@ -5,11 +5,11 @@ Quick start
 >>> from ase.build import bulk
 >>> from rinse_descriptor import descriptor, RinseParams
 >>> atoms = bulk("NaCl", "rocksalt", a=5.64)
->>> x = descriptor(atoms)           # (8, 16) ndarray, or 128-element vector
->>> x.shape
-(8, 16)
+>>> x = descriptor(atoms)           # (n_max, n_l_levels) ndarray by default
+>>> x.shape == RinseParams().descriptor_shape
+True
 
->>> X = descriptor_many([atoms, atoms])   # (2, 8, 16)
+>>> X = descriptor_many([atoms, atoms])
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from ._descriptor import (
     normalise_power_spectrum,
     power_spectrum_to_vector,
 )
-from ._hash import descriptor_hash, hash_to_bits
+from ._hash import DEFAULT_HASH_WORDS, descriptor_hash, hash_to_bits
 from ._structure_factors import (
     FormFactorType,
     ReflectionList,
@@ -51,6 +51,7 @@ __all__ = [
     "descriptor_many",
     "descriptor_hash",
     "hash_to_bits",
+    "DEFAULT_HASH_WORDS",
 ]
 
 
@@ -74,8 +75,8 @@ def descriptor(
         An :class:`ase.Atoms` object, a :class:`~rinse_descriptor.Crystal`, or a path
         to a CIF file (str / :class:`pathlib.Path`).
     params:
-        Descriptor hyper-parameters.  Uses defaults if *None*:
-        n_max=8, l_max=16, sin_θ/λ_max=0.6, radial_basis="chebyshev".
+        Descriptor hyper-parameters.  Uses :class:`RinseParams` defaults if *None*
+        (see :class:`RinseParams` for current values).
     form_factor_type:
         ``"xray"`` | ``"electron"`` | ``"neutron"`` | ``"unity"``.
     structure_factor_type:
@@ -83,8 +84,8 @@ def descriptor(
     b_factors:
         Per-atom isotropic B-factors in Å².  *None* → unit B-factors (1 Å²).
     flatten:
-        If *True*, return a 1-D vector of length n_max*l_max instead of the
-        2-D (n_max, l_max) matrix.
+        If *True*, return a 1-D vector of length ``n_max * n_l_levels`` instead
+        of the 2-D ``(n_max, n_l_levels)`` matrix.
     l2:
         If *True*, apply L2 normalization to the descriptor vector.
     log1p:
@@ -92,7 +93,8 @@ def descriptor(
 
     Returns
     -------
-    ndarray of shape (n_max, l_max) [default] or (n_max*l_max,) [flatten=True].
+    ndarray of shape ``(n_max, n_l_levels)`` [default] or
+    ``(n_max * n_l_levels,)`` [flatten=True].
     """
     import pathlib
 

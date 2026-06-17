@@ -43,6 +43,9 @@ _VOWELS = "aiou"  # 4 characters → 2-bit index
 # Bits per proquint word: C(4) V(2) C(4) V(2) C(4) = 16
 _BITS_PER_WORD = 16
 
+#: Default number of proquint words produced by :func:`descriptor_hash`.
+DEFAULT_HASH_WORDS = 5
+
 
 def _int16_to_proquint(n: int) -> str:
     """Encode a 16-bit unsigned integer as a five-character proquint word."""
@@ -73,7 +76,7 @@ def _proquint_to_int16(word: str) -> int:
 
 def descriptor_hash(
     x: NDArray[np.float64],
-    n_words: int = 5,
+    n_words: int = DEFAULT_HASH_WORDS,
 ) -> str:
     """Convert a descriptor vector to a pronounceable proquint hash string.
 

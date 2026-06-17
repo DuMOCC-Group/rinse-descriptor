@@ -42,12 +42,19 @@ async def _():
 def _():
     import matplotlib.pyplot as plt
     import numpy as np
-    from rinse_descriptor import Crystal, RinseParams, descriptor, descriptor_hash
+    from rinse_descriptor import (
+        DEFAULT_HASH_WORDS,
+        Crystal,
+        RinseParams,
+        descriptor,
+        descriptor_hash,
+    )
     from rinse_descriptor._descriptor import compute_power_spectrum, power_spectrum_to_vector
     from rinse_descriptor._structure_factors import compute_structure_factors
 
     return (
         Crystal,
+        DEFAULT_HASH_WORDS,
         RinseParams,
         compute_power_spectrum,
         compute_structure_factors,
@@ -136,12 +143,17 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(DEFAULT_HASH_WORDS, RinseParams, mo):
+    import dataclasses
+
+    _p = dataclasses.fields(RinseParams)
+    _defaults = {f.name: f.default for f in _p}
+
     n_max_slider = mo.ui.slider(
         start=2,
         stop=64,
         step=2,
-        value=8,
+        value=_defaults["n_max"],
         label="n_max  (radial basis functions, n = 0 … n_max−1)",
         show_value=True,
     )
@@ -149,7 +161,7 @@ def _(mo):
         start=2,
         stop=64,
         step=2,
-        value=32,
+        value=_defaults["l_max"],
         label="l_max  (max ℓ exclusive, ℓ = l_min, l_min+2, …, l_max−2)",
         show_value=True,
     )
@@ -157,7 +169,7 @@ def _(mo):
         start=0,
         stop=8,
         step=2,
-        value=0,
+        value=_defaults["l_min"],
         label="l_min  (first angular level included, ℓ ≥ l_min)",
         show_value=True,
     )
@@ -165,13 +177,13 @@ def _(mo):
         start=0.1,
         stop=2.0,
         step=0.1,
-        value=0.6,
+        value=_defaults["sin_theta_over_lambda_max"],
         label="sin(θ)/λ_max  (Å⁻¹)  →  |G|_max = 2 × this value",
         show_value=True,
     )
     basis_dd = mo.ui.dropdown(
         options=["chebyshev", "bessel", "smooth_shells_cw", "smooth_shells_nl"],
-        value="smooth_shells_nl",
+        value="smooth_shells_nl",  # demo default; library default is "chebyshev"
         label="Radial basis",
     )
     ff_dd = mo.ui.dropdown(
@@ -186,12 +198,12 @@ def _(mo):
     )
     log1p_compression_cb = mo.ui.checkbox(value=True, label="log1p compression")
     l2_normalisation_cb = mo.ui.checkbox(value=True, label="l2 normalisation")
-    include_odd_l_cb = mo.ui.checkbox(value=False, label="include odd ℓ")
+    include_odd_l_cb = mo.ui.checkbox(value=_defaults["include_odd_l"], label="include odd ℓ")
     n_words_slider = mo.ui.slider(
         start=1,
         stop=10,
         step=1,
-        value=5,
+        value=DEFAULT_HASH_WORDS,
         label="hash words  (each word = 16 bits)",
         show_value=True,
     )
