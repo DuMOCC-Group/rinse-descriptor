@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import IO, TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -131,8 +132,15 @@ class Crystal:
         )
 
     @classmethod
-    def from_cif(cls, path: str) -> Crystal:
-        """Load a structure from a CIF file.
+    def from_cif(cls, path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Crystal:
+        """Load a structure from a CIF file, path, or file-like object.
+
+        Parameters
+        ----------
+        path:
+            A file path (``str`` or :class:`pathlib.Path`), an open binary or
+            text file-like object (e.g. ``open(..., 'rb')``, ``BytesIO``,
+            ``StringIO``), or any object with a ``read()`` method.
 
         Uses gemmi when available; falls back to a pure-Python CIF parser
         (e.g., on WebAssembly / Emscripten platforms where gemmi has no wheel).
@@ -140,14 +148,32 @@ class Crystal:
         The asymmetric unit is expanded to the full unit cell using the space
         group symmetry operations stored in (or inferred from) the CIF.
         """
+        # ── Normalise input to (path_str | None, cif_text) ────────────────────
+        path_str: str | None
+        cif_text: str | None
+        if hasattr(path, "read"):
+            reader = cast(IO[bytes], path)
+            raw = reader.read()
+            cif_text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
+            path_str = None
+        else:
+            path_str = str(path)
+            cif_text = None
+
         try:
             from gemmi import Op, cif, find_spacegroup_by_name, make_small_structure_from_block
         except ImportError:
             from ._pure_python import crystal_from_cif_pure
 
-            return crystal_from_cif_pure(path)
+            if cif_text is not None:
+                return crystal_from_cif_pure(cif_text=cif_text)
+            return crystal_from_cif_pure(path=path_str)
 
-        doc = cif.read_file(str(path))
+        if cif_text is not None:
+            doc = cif.read_string(cif_text)
+        else:
+            assert path_str is not None
+            doc = cif.read_file(path_str)
         # Use sole_block() when possible; fall back to first block.
         try:
             block = doc.sole_block()

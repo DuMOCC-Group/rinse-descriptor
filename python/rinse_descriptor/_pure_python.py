@@ -409,7 +409,11 @@ def _parse_symop(
 # ---------------------------------------------------------------------------
 
 
-def crystal_from_cif_pure(path: str) -> Crystal:
+def crystal_from_cif_pure(
+    path: str | None = None,
+    *,
+    cif_text: str | None = None,
+) -> Crystal:
     """Load a :class:`~rinse_descriptor.Crystal` from a CIF file using only
     the Python standard library and NumPy (no gemmi required).
 
@@ -419,8 +423,13 @@ def crystal_from_cif_pure(path: str) -> Crystal:
     """
     from ._crystal import Crystal
 
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        text = fh.read()
+    if cif_text is None:
+        if path is None:
+            raise ValueError("Either path or cif_text must be provided.")
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    else:
+        text = cif_text
 
     d = _parse_cif(text)
 
