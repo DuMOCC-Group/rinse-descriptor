@@ -23,7 +23,6 @@ app = marimo.App(width="medium")
 
 @app.cell(hide_code=True)
 def _():
-    import sys
     import marimo as mo
 
     return (mo,)
@@ -969,7 +968,9 @@ def _(
     _ax.set_xlim(0, len(_vec) - 1)
     # plt.yscale('log')
     plt.tight_layout()
-    print(f"Crystal 1: {descriptor_hash(vec, n_words=n_words_slider.value)}\nCrystal 2: {descriptor_hash(vec2, n_words=n_words_slider.value)}")
+    print(f"CIF 1: {descriptor_hash(vec, n_words=n_words_slider.value)}\n"
+          f"CIF 2: {descriptor_hash(vec2, n_words=n_words_slider.value)}"
+    )
     _fig2
     return
 
