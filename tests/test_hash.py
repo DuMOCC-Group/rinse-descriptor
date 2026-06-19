@@ -104,10 +104,10 @@ class TestProquintWord:
 
 
 class TestHashFormat:
-    def test_default_word_count(self, nacl_vec: np.ndarray) -> None:
+    def test_default_one_words(self, nacl_vec: np.ndarray) -> None:
         h = descriptor_hash(nacl_vec)
         words = h.split("-")
-        assert len(words) == DEFAULT_HASH_WORDS
+        assert len(words) == 1
 
     def test_custom_n_words(self, nacl_vec: np.ndarray) -> None:
         for n in (1, 3, 7):
@@ -174,7 +174,7 @@ class TestDistinctStructures:
 class TestHashToBits:
     def test_bits_shape_default(self, nacl_vec: np.ndarray) -> None:
         bits = hash_to_bits(descriptor_hash(nacl_vec))
-        assert bits.shape == (DEFAULT_HASH_WORDS * _BITS_PER_WORD,)
+        assert bits.shape == (1 * _BITS_PER_WORD,)
 
     def test_bits_shape_custom_words(self, nacl_vec: np.ndarray) -> None:
         for n in (1, 3, 7):

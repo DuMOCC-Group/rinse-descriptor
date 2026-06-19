@@ -13,18 +13,16 @@ Algorithm
 ---------
 Given a flat descriptor vector **x** of length *D*:
 
-1. **Whiten**: apply PCA whitening via :func:`default_whitening` (see below),
-   projecting *x* into a *k*-dimensional space where every direction has unit
-   variance.  This makes all proquint characters equally reachable.
-2. **Project**: draw a deterministic random matrix **W** of shape
-   ``(n_bits, k)`` using :func:`numpy.random.default_rng` with seed 0.
-3. **Binarise**: ``bits = (W @ x_white > 0)`` — the SimHash bit vector.
-4. **Encode**: pack bits into ``n_words`` 16-bit integers, each encoded as a
-   five-character proquint word (``CVCVC``, 4+2+4+2+4 = 16 bits).
+1. Project **x** onto the first ``n_bits`` principal components from PCA,
+   using the precomputed PCA model stored in ``pca_components.json``.
+2. Compute ``bits = (projected_x > 0)`` — the hash bit vector.
+3. Pack the bits into ``n_words`` 16-bit integers and encode each as a
+   five-character proquint word (``CVCVC`` pattern, 4+2+4+2+4 = 16 bits).
 
-Locality sensitivity is preserved: two structurally similar descriptors agree
-on most random-halfspace signs (Johnson–Lindenstrauss), so they tend to
-produce the same hash.
+The hash is **deterministic** and uses learned principal components
+rather than random projections. Two structurally similar descriptors
+will produce the same hash because they project to nearby points in
+the PCA subspace.
 
 Proquint alphabet
 -----------------
@@ -57,10 +55,8 @@ To disable whitening entirely::
 
 from __future__ import annotations
 
-import functools
-import os
-from collections.abc import Iterable
-from typing import IO
+import json
+from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
@@ -77,6 +73,61 @@ _BITS_PER_WORD = 16
 
 #: Default number of proquint words produced by :func:`descriptor_hash`.
 DEFAULT_HASH_WORDS = 1
+
+# ---------------------------------------------------------------------------
+# PCA model loading
+# ---------------------------------------------------------------------------
+
+_PCA_CACHE: dict[str, tuple[NDArray[np.float64], NDArray[np.float64]]] = {}
+
+
+def _get_default_pca_path() -> Path:
+    """Get the default path to the bundled PCA components file."""
+    return Path(__file__).parent / "data" / "pca_components.json"
+
+
+def _load_pca_components(
+    pca_file: str | Path | None = None,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Load PCA components and mean from JSON file (cached).
+
+    Parameters
+    ----------
+    pca_file : str, Path, or None
+        Path to PCA components JSON file. If None, uses the bundled
+        data file in the package.
+
+    Returns
+    -------
+    components : ndarray
+        PCA components matrix of shape (n_components, n_features)
+    mean : ndarray
+        Mean vector used for centering, shape (n_features,)
+    """
+    if pca_file is None:
+        path = _get_default_pca_path()
+        cache_key = "__default__"
+    else:
+        path = Path(pca_file)
+        cache_key = str(pca_file)
+
+    if cache_key in _PCA_CACHE:
+        return _PCA_CACHE[cache_key]
+
+    if not path.exists():
+        raise FileNotFoundError(
+            f"PCA components file not found: {path}\n"
+            f"The bundled PCA model should be in the package data directory."
+        )
+
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    components = np.array(data["components"], dtype=np.float64)
+    mean = np.array(data["mean"], dtype=np.float64)
+
+    _PCA_CACHE[cache_key] = (components, mean)
+    return components, mean
 
 
 def _int16_to_proquint(n: int) -> str:
@@ -132,206 +183,10 @@ def _sanitise_word(word: str) -> str:
     return replacement
 
 
-# ---------------------------------------------------------------------------
-# PCA whitening
-# ---------------------------------------------------------------------------
-
-
-class HashWhitening:
-    """PCA whitening transform for :func:`descriptor_hash`.
-
-    :func:`descriptor_hash` uses :func:`default_whitening` automatically.
-    Use this class directly only when you want to fit from real structures
-    or serialise/deserialise a custom transform.
-
-    The transform maps a descriptor vector through:
-
-    1. ``log1p`` — compresses the positive-orthant cluster.
-    2. Mean subtraction — centres the data at the origin.
-    3. PCA projection — rotates into the directions of maximum variance.
-    4. Scale division — whitens each axis to unit variance.
-
-    The result is a *k*-dimensional vector whose components are approximately
-    independent and unit-variance, so every SimHash projection row has a
-    near-zero bias across the training distribution and all proquint characters
-    become equally reachable.
-
-    Fitting from real structures
-    ----------------------------
-    >>> wt = fit_hash_whitening(descriptor_many(structures))
-    >>> wt.save("whitening.npz")
-    >>> descriptor_hash(x, whitening=wt)
-
-    Reloading
-    ---------
-    >>> wt = HashWhitening.load("whitening.npz")
-    >>> descriptor_hash(x, whitening=wt)
-    """
-
-    def __init__(
-        self,
-        mean: NDArray[np.float64],
-        components: NDArray[np.float64],
-        scale: NDArray[np.float64],
-    ) -> None:
-        self.mean = mean  # (D,)  log1p-space mean
-        self.components = components  # (k, D)  top-k PCA eigenvectors
-        self.scale = scale  # (k,)  sqrt of sample eigenvalues
-
-    @property
-    def n_components(self) -> int:
-        """Number of retained principal components."""
-        return int(self.components.shape[0])
-
-    @property
-    def input_dim(self) -> int:
-        """Descriptor dimension expected by :meth:`transform`."""
-        return int(self.components.shape[1])
-
-    def transform(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
-        """Map a descriptor vector to a whitened *k*-dimensional vector.
-
-        Applies ``log1p → subtract mean → project onto PCs → divide by scale``.
-
-        Raises
-        ------
-        ValueError
-            If *x* has a different length than :attr:`input_dim`.
-        """
-        vec = np.log1p(np.asarray(x, dtype=np.float64).ravel())
-        if vec.shape[0] != self.input_dim:
-            raise ValueError(
-                f"Descriptor has {vec.shape[0]} dimensions but this whitening "
-                f"transform expects {self.input_dim}.  Re-fit with matching "
-                f"RinseParams, or use default_whitening() only with default "
-                f"RinseParams."
-            )
-        vec = vec - self.mean
-        proj = self.components @ vec  # (k,)
-        return proj / self.scale
-
-    def save(self, path: str | os.PathLike[str]) -> None:
-        """Save to a NumPy ``.npz`` archive."""
-        np.savez_compressed(
-            path,
-            mean=self.mean,
-            components=self.components,
-            scale=self.scale,
-        )
-
-    @classmethod
-    def load(cls, path: str | os.PathLike[str] | IO[bytes]) -> HashWhitening:
-        """Load from a NumPy ``.npz`` archive saved by :meth:`save`.
-
-        *path* may be a file-system path, a :class:`pathlib.Path`, or any
-        binary file-like object (e.g. from :mod:`importlib.resources`).
-        """
-        data = np.load(path)
-        return cls(
-            mean=data["mean"].astype(np.float64),
-            components=data["components"].astype(np.float64),
-            scale=data["scale"].astype(np.float64),
-        )
-
-
-def fit_hash_whitening(
-    descriptors: Iterable[NDArray[np.float64]],
-    n_components: int = 64,
-) -> HashWhitening:
-    """Fit a PCA whitening transform from a collection of descriptor vectors.
-
-    Parameters
-    ----------
-    descriptors:
-        Iterable of flat, non-negative descriptor vectors (all the same
-        length).  Pass the output of :func:`~rinse_descriptor.descriptor` or
-        :func:`~rinse_descriptor.descriptor_many`.
-    n_components:
-        Number of principal components to retain.  Automatically capped at
-        ``min(n_samples - 1, input_dim)``.
-
-    Returns
-    -------
-    HashWhitening
-        Fitted transform.  Persist with :meth:`HashWhitening.save` and reload
-        later with :meth:`HashWhitening.load`.
-
-    Notes
-    -----
-    PCA is computed via an economy SVD of the log1p-transformed, centred data
-    matrix, which is numerically stable for both ``N < D`` and ``N > D``.
-    """
-    mat = np.stack(
-        [np.log1p(np.asarray(d, dtype=np.float64).ravel()) for d in descriptors]
-    )  # (N, D)
-    if mat.ndim != 2 or mat.shape[0] < 2:
-        raise ValueError("Need at least 2 descriptor vectors to fit a whitening transform.")
-
-    mean = mat.mean(axis=0)
-    centered = mat - mean  # (N, D)
-
-    # Economy SVD — stable for both fat (N < D) and tall (N > D) matrices
-    _U, s, Vt = np.linalg.svd(centered, full_matrices=False)  # s: (min(N,D),)
-    # Centring removes one degree of freedom, so the true rank is at most N-1
-    k = min(n_components, mat.shape[0] - 1, mat.shape[1])
-    components = Vt[:k]  # (k, D)
-
-    # Sample eigenvalues of the covariance matrix
-    eigenvalues = (s[:k] ** 2) / (mat.shape[0] - 1)
-    scale = np.sqrt(eigenvalues)
-    scale = np.where(scale > 0.0, scale, 1.0)  # guard near-zero trailing eigenvalues
-
-    return HashWhitening(mean=mean, components=components, scale=scale)
-
-
-def _synthetic_whitening(
-    dim: int,
-    n_samples: int = 2000,
-    n_components: int = 64,
-    seed: int = 42,
-) -> HashWhitening:
-    """Fit a whitening transform from synthetic positive unit vectors.
-
-    Draws *n_samples* vectors from an exponential distribution (mimicking the
-    heavy-tailed, all-positive shape of L2-normalised power spectra), then
-    normalises each to unit L2 norm and fits PCA whitening.
-    Using a fixed *seed* makes the result fully deterministic.
-    """
-    rng = np.random.default_rng(seed)
-    raw = rng.exponential(scale=1.0, size=(n_samples, dim)).astype(np.float64)
-    norms = np.linalg.norm(raw, axis=1, keepdims=True)
-    vecs: list[NDArray[np.float64]] = list(raw / norms)
-    return fit_hash_whitening(vecs, n_components=n_components)
-
-
-@functools.lru_cache(maxsize=1)
-def default_whitening() -> HashWhitening:
-    """Return a PCA whitening transform sized for default :class:`~rinse_descriptor.RinseParams`.
-
-    The transform is synthesised on the first call from pseudo-random positive
-    unit vectors (exponential distribution, L2-normalised) that approximate
-    the shape of real power-spectrum descriptors.  A fixed seed ensures it is
-    fully deterministic and reproducible without shipping a data file.
-
-    The result is cached; subsequent calls return the same object.
-
-    Raises
-    ------
-    ValueError
-        If the descriptor passed to :func:`descriptor_hash` was not computed
-        with default :class:`~rinse_descriptor.RinseParams`.
-    """
-    from ._descriptor import RinseParams
-
-    dim = RinseParams().descriptor_length
-    return _synthetic_whitening(dim)
-
-
 def descriptor_hash(
     x: NDArray[np.float64],
     n_words: int = DEFAULT_HASH_WORDS,
-    *,
-    whitening: HashWhitening | None | bool = None,
+    pca_file: str | Path | None = None,
 ) -> str:
     """Convert a descriptor vector to a pronounceable proquint hash string.
 
@@ -342,39 +197,24 @@ def descriptor_hash(
         :func:`~rinse_descriptor.power_spectrum_to_vector` or use
         ``descriptor(..., flatten=True)``.
     n_words:
-        Number of proquint words in the output.
-        Each word encodes 16 bits, so ``n_words=5`` → 80 hash bits total.
+        Number of proquint words in the output (default 1).
+        Each word encodes 16 bits, so ``n_words=1`` → 16 hash bits total.
         The output string has ``5 * n_words + (n_words - 1)`` characters
         (words joined by ``"-"``).
-    whitening:
-        Controls PCA whitening before hashing:
-
-        * ``None`` (default) — use :func:`default_whitening`, which is a
-          transform synthesised from pseudo-random positive unit vectors
-          matching the shape of power-spectrum descriptors.
-        * A :class:`HashWhitening` instance — use that transform instead
-          (e.g. one fitted from real structures via :func:`fit_hash_whitening`).
-        * ``False`` — disable whitening entirely and use bare ``log1p``
-          preprocessing.
+    pca_file:
+        Path to the PCA components JSON file. If None (default), uses
+        the bundled PCA model from the package data directory.
 
     Returns
     -------
     str
-        Hyphen-separated proquint words, e.g. ``"lusab-babad-gutih-tugad-mudof"``.
+        Hyphen-separated proquint words, e.g. ``"lusab-babad"``.
 
     Notes
     -----
-    With whitening (default): ``log1p → centre → PCA project → scale``
-    produces a spherically distributed input so that every proquint character
-    is equally reachable at every position.
-
-    Without whitening (``whitening=False``): the vector is transformed by
-    ``log1p`` only, which reduces but does not eliminate projection bias.
-
-    The projection matrix **W** is drawn deterministically (seed 0) with
-    shape ``(n_bits, input_dim)`` where *input_dim* is the post-whitening
-    dimension, so hashes computed with different whitening transforms are
-    **not** comparable.
+    The descriptor is first centered using the PCA mean, then projected
+    onto the first ``n_bits`` principal components. The sign of each
+    projection coefficient determines the corresponding hash bit.
     """
     vec = np.asarray(x, dtype=np.float64).ravel()
     if vec.shape[0] == 0:
@@ -388,8 +228,29 @@ def descriptor_hash(
         vec = w.transform(vec)
 
     n_bits = n_words * _BITS_PER_WORD
-    W = np.random.default_rng(0).standard_normal((n_bits, vec.shape[0]))  # (n_bits, dim)
-    bits: NDArray[np.bool_] = (W @ vec) > 0  # (n_bits,)
+
+    # Load PCA components and mean
+    components, mean = _load_pca_components(pca_file)
+
+    # Check that we have enough components
+    if components.shape[0] < n_bits:
+        raise ValueError(
+            f"Need at least {n_bits} PCA components for {n_words} words, "
+            f"but only {components.shape[0]} available"
+        )
+
+    # Check dimension matches
+    if components.shape[1] != dim:
+        raise ValueError(
+            f"Descriptor dimension {dim} does not match PCA feature dimension "
+            f"{components.shape[1]}. Ensure the PCA was fit on the same descriptor type."
+        )
+
+    # Project onto first n_bits principal components
+    # PCA projection: centered_x @ components.T = (x - mean) @ components.T
+    centered = vec - mean
+    projection = components[:n_bits] @ centered  # (n_bits,)
+    bits: NDArray[np.bool_] = projection > 0  # (n_bits,)
 
     words: list[str] = []
     for i in range(n_words):

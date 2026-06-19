@@ -78,3 +78,7 @@ dmypy.json
 
 crystal_pickles/
 umap_hdbscan_results.csv
+
+# CSD hash computation outputs (tools/)
+csd_descriptors.pkl
+csd_hashes.csv
