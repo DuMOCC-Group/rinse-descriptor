@@ -15,7 +15,6 @@ Usage examples
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import sys
 from pathlib import Path
@@ -133,35 +132,6 @@ def _make_parser() -> argparse.ArgumentParser:
         metavar="W",
         help="Number of 16-bit proquint words in the hash.",
     )
-    h.add_argument(
-        "--whitening",
-        default=None,
-        metavar="NPZ",
-        help=(
-            "Path to a whitening .npz file (saved by --fit-whitening) to use "
-            "instead of the default synthetic whitening transform."
-        ),
-    )
-    h.add_argument(
-        "--no-whitening",
-        dest="no_whitening",
-        action="store_true",
-        help=(
-            "Disable PCA whitening entirely; use bare log1p preprocessing. "
-            "Not recommended — hashes will be biased toward a subset of characters."
-        ),
-    )
-    h.add_argument(
-        "--fit-whitening",
-        default=None,
-        metavar="NPZ",
-        dest="fit_whitening",
-        help=(
-            "Fit a PCA whitening transform from all input descriptors and save "
-            "it to this path.  Can be combined with --hash to also print hashes "
-            "using the newly fitted transform."
-        ),
-    )
 
     # Output
     p.add_argument(
@@ -206,12 +176,11 @@ def _compute_one(
     structure_factor_type: str,
     want_hash: bool,
     hash_words: int,
-    whitening: object = None,
 ) -> tuple[object, str | None]:
     """Return (array, hash_str|None).  Raises on error."""
     from typing import Literal, cast
 
-    from . import HashWhitening, RinseParams, descriptor, descriptor_hash
+    from . import RinseParams, descriptor, descriptor_hash
     from ._structure_factors import FormFactorType, StructureFactorType
 
     assert isinstance(params, RinseParams)
@@ -227,10 +196,7 @@ def _compute_one(
             structure_factor_type,
         ),
     )
-    w: HashWhitening | None | bool = (
-        whitening if (isinstance(whitening, HashWhitening) or whitening is False) else None
-    )
-    h = descriptor_hash(vec.ravel(), n_words=hash_words, whitening=w) if want_hash else None
+    h = descriptor_hash(vec.ravel(), n_words=hash_words) if want_hash else None
     return vec, h
 
 
@@ -256,33 +222,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(exc))
         return 1  # unreachable, but satisfies type checker
 
-    # Resolve whitening transform
-    # Priority: --no-whitening > --whitening <path> > default (synthetic)
-    whitening: object = None  # None → descriptor_hash uses default_whitening()
-    if getattr(args, "no_whitening", False):
-        whitening = False  # descriptor_hash accepts False to disable
-    elif args.whitening is not None:
-        from . import HashWhitening
-
-        whitening_path = Path(args.whitening)
-        if not whitening_path.exists():
-            parser.error(f"Whitening file not found: {args.whitening}")
-        whitening = HashWhitening.load(whitening_path)
-
     results: list[dict[str, object]] = []
     errors: list[str] = []
 
-    # Expand glob patterns explicitly — necessary on Windows where the shell
-    # does not expand wildcards before passing arguments to the process.
-    cif_paths: list[str] = []
-    for pattern in args.cif:
-        expanded = glob.glob(pattern)
-        if expanded:
-            cif_paths.extend(expanded)
-        else:
-            cif_paths.append(pattern)  # keep as-is so the "not found" error is clear
-
-    for cif in cif_paths:
+    for cif in args.cif:
         path = Path(cif)
         if not path.exists():
             errors.append(f"{cif}: file not found")
@@ -295,40 +238,12 @@ def main(argv: list[str] | None = None) -> int:
                 structure_factor_type=args.structure_factor_type,
                 want_hash=args.hash,
                 hash_words=args.hash_words,
-                whitening=whitening,
             )
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{cif}: {exc}")
             continue
 
         results.append({"file": cif, "vector": vec, "hash": h})
-
-    # Fit and save a whitening transform from all successfully computed descriptors
-    if args.fit_whitening is not None:
-        if len(results) < 2:
-            print(
-                "ERROR: --fit-whitening requires at least 2 successful descriptors.",
-                file=sys.stderr,
-            )
-        else:
-            from . import fit_hash_whitening
-
-            vecs = [np.asarray(r["vector"]).ravel() for r in results]
-            wt = fit_hash_whitening(vecs)
-            wt.save(args.fit_whitening)
-            print(
-                f"Saved whitening transform ({wt.n_components} components) to {args.fit_whitening}"
-            )
-            # If --hash was also set, recompute hashes with the new whitening
-            if args.hash:
-                from . import descriptor_hash
-
-                for r in results:
-                    r["hash"] = descriptor_hash(
-                        np.asarray(r["vector"]).ravel(),
-                        n_words=args.hash_words,
-                        whitening=wt,
-                    )
 
     if args.output_format == "json":
         out: list[dict[str, object]] = []

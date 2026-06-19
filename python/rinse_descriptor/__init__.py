@@ -29,14 +29,7 @@ from ._descriptor import (
     normalise_power_spectrum,
     power_spectrum_to_vector,
 )
-from ._hash import (
-    DEFAULT_HASH_WORDS,
-    HashWhitening,
-    default_whitening,
-    descriptor_hash,
-    fit_hash_whitening,
-    hash_to_bits,
-)
+from ._hash import DEFAULT_HASH_WORDS, descriptor_hash, hash_to_bits
 from ._structure_factors import (
     FormFactorType,
     ReflectionList,
@@ -58,9 +51,6 @@ __all__ = [
     "descriptor_many",
     "descriptor_hash",
     "hash_to_bits",
-    "HashWhitening",
-    "fit_hash_whitening",
-    "default_whitening",
     "DEFAULT_HASH_WORDS",
 ]
 

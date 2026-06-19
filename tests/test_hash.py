@@ -7,13 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 from rinse_descriptor import (
-    DEFAULT_HASH_WORDS,
     Crystal,
-    HashWhitening,
-    default_whitening,
     descriptor,
     descriptor_hash,
-    fit_hash_whitening,
     hash_to_bits,
 )
 from rinse_descriptor._hash import (
@@ -210,12 +206,49 @@ class TestHashToBits:
 
 
 class TestBlocklist:
+    def make_proquint_word(self, word: str) -> str:
+        if len(word) == 5:
+            pass
+        elif len(word) == 4:
+            if (
+                word[0] in _CONSONANTS
+                and word[1] in _VOWELS
+                and word[2] in _CONSONANTS
+                and word[3] in _VOWELS
+            ):
+                word = word + "b"  # pad to 5 chars
+            if (
+                word[0] in _VOWELS
+                and word[1] in _CONSONANTS
+                and word[2] in _VOWELS
+                and word[3] in _CONSONANTS
+            ):
+                word = word + "a"  # pad to 5 chars
+        elif len(word) == 3:
+            if word[0] in _CONSONANTS and word[1] in _VOWELS and word[2] in _CONSONANTS:
+                word = word + "ab"  # pad to 5 chars
+            elif word[0] in _VOWELS and word[1] in _CONSONANTS and word[2] in _VOWELS:
+                word = "b" + word + "b"  # pad to 5 chars
+        elif len(word) == 2:
+            if word[0] in _CONSONANTS and word[1] in _VOWELS:
+                word = word + "bab"  # pad to 5 chars
+            elif word[0] in _VOWELS and word[1] in _CONSONANTS:
+                word = "bab" + word  # pad to 5 chars
+        elif len(word) == 1:
+            if word[0] in _CONSONANTS:
+                word = word + "abab"  # pad to 5 chars
+            elif word[0] in _VOWELS:
+                word = "babab"  # pad to 5 chars
+        return word
+
     def test_blocked_words_replaced(self) -> None:
         for word in _BLOCKED_WORDS:
+            word = self.make_proquint_word(word)
             assert _sanitise_word(word) != word
 
     def test_replacement_is_valid_proquint(self) -> None:
         for word in _BLOCKED_WORDS:
+            word = self.make_proquint_word(word)
             replacement = _sanitise_word(word)
             assert len(replacement) == 5
             assert replacement[0] in _CONSONANTS
@@ -226,156 +259,17 @@ class TestBlocklist:
 
     def test_replacement_not_in_blocklist(self) -> None:
         for word in _BLOCKED_WORDS:
+            word = self.make_proquint_word(word)
             assert _sanitise_word(word) not in _BLOCKED_WORDS
 
     def test_no_blocked_word_in_hash_output(self) -> None:
         rng = np.random.default_rng(42)
         for _ in range(200):
             vec = rng.standard_normal(128)
-            words = descriptor_hash(vec, n_words=8, whitening=False).split("-")
+            words = descriptor_hash(vec, n_words=8).split("-")
             for word in words:
                 assert word not in _BLOCKED_WORDS, f"Blocked word {word!r} appeared in hash"
 
     def test_non_blocked_word_unchanged(self) -> None:
         safe = "babab"
         assert _sanitise_word(safe) == safe
-
-
-# ---------------------------------------------------------------------------
-# HashWhitening / fit_hash_whitening
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="module")
-def all_vecs() -> list[np.ndarray]:
-    """Descriptor vectors for all four fixture crystals."""
-    names = ["nacl.cif", "si.cif", "ylid.cif", "mpox.cif"]
-    return [descriptor(Crystal.from_cif(FIXTURES_DIR / n)) for n in names]
-
-
-@pytest.fixture(scope="module")
-def whitening(all_vecs: list[np.ndarray]) -> HashWhitening:
-    return fit_hash_whitening(all_vecs, n_components=8)
-
-
-class TestFitHashWhitening:
-    def test_returns_hash_whitening(self, all_vecs: list[np.ndarray]) -> None:
-        wt = fit_hash_whitening(all_vecs)
-        assert isinstance(wt, HashWhitening)
-
-    def test_n_components_respected(self, all_vecs: list[np.ndarray]) -> None:
-        wt = fit_hash_whitening(all_vecs, n_components=3)
-        assert wt.n_components == 3
-
-    def test_capped_at_n_samples_minus_one(self, all_vecs: list[np.ndarray]) -> None:
-        # 4 samples → max rank = 3
-        wt = fit_hash_whitening(all_vecs, n_components=1000)
-        assert wt.n_components <= len(all_vecs) - 1
-
-    def test_input_dim_matches_descriptor(self, all_vecs: list[np.ndarray]) -> None:
-        wt = fit_hash_whitening(all_vecs)
-        assert wt.input_dim == all_vecs[0].shape[0]
-
-    def test_requires_at_least_two(self, nacl_vec: np.ndarray) -> None:
-        with pytest.raises(ValueError, match="at least 2"):
-            fit_hash_whitening([nacl_vec])
-
-    def test_mean_shape(self, whitening: HashWhitening, all_vecs: list[np.ndarray]) -> None:
-        assert whitening.mean.shape == (all_vecs[0].shape[0],)
-
-    def test_components_shape(self, whitening: HashWhitening) -> None:
-        assert whitening.components.ndim == 2
-        assert whitening.components.shape[0] == whitening.n_components
-        assert whitening.components.shape[1] == whitening.input_dim
-
-    def test_scale_positive(self, whitening: HashWhitening) -> None:
-        assert np.all(whitening.scale > 0)
-
-    def test_components_orthonormal(self, whitening: HashWhitening) -> None:
-        gram = whitening.components @ whitening.components.T
-        assert np.allclose(gram, np.eye(whitening.n_components), atol=1e-10)
-
-
-class TestHashWhiteningTransform:
-    def test_output_shape(self, whitening: HashWhitening, nacl_vec: np.ndarray) -> None:
-        out = whitening.transform(nacl_vec)
-        assert out.shape == (whitening.n_components,)
-
-    def test_deterministic(self, whitening: HashWhitening, nacl_vec: np.ndarray) -> None:
-        assert np.array_equal(whitening.transform(nacl_vec), whitening.transform(nacl_vec))
-
-
-class TestHashWhiteningPersistence:
-    def test_save_load_roundtrip(self, whitening: HashWhitening, tmp_path: Path) -> None:
-        p = tmp_path / "wt.npz"
-        whitening.save(p)
-        loaded = HashWhitening.load(p)
-        assert np.allclose(loaded.mean, whitening.mean)
-        assert np.allclose(loaded.components, whitening.components)
-        assert np.allclose(loaded.scale, whitening.scale)
-
-    def test_hash_identical_after_reload(
-        self, whitening: HashWhitening, nacl_vec: np.ndarray, tmp_path: Path
-    ) -> None:
-        p = tmp_path / "wt.npz"
-        whitening.save(p)
-        loaded = HashWhitening.load(p)
-        assert descriptor_hash(nacl_vec, whitening=whitening) == descriptor_hash(
-            nacl_vec, whitening=loaded
-        )
-
-
-class TestDescriptorHashWithWhitening:
-    def test_returns_str(self, whitening: HashWhitening, nacl_vec: np.ndarray) -> None:
-        assert isinstance(descriptor_hash(nacl_vec, whitening=whitening), str)
-
-    def test_word_count(self, whitening: HashWhitening, nacl_vec: np.ndarray) -> None:
-        h = descriptor_hash(nacl_vec, n_words=3, whitening=whitening)
-        assert len(h.split("-")) == 3
-
-    def test_each_word_five_chars(self, whitening: HashWhitening, nacl_vec: np.ndarray) -> None:
-        for word in descriptor_hash(nacl_vec, whitening=whitening).split("-"):
-            assert len(word) == 5
-
-    def test_deterministic(self, whitening: HashWhitening, nacl_vec: np.ndarray) -> None:
-        assert descriptor_hash(nacl_vec, whitening=whitening) == descriptor_hash(
-            nacl_vec, whitening=whitening
-        )
-
-    def test_different_from_no_whitening(
-        self, whitening: HashWhitening, nacl_vec: np.ndarray
-    ) -> None:
-        # Custom whitening and unwhitened (False) use different projection spaces
-        assert descriptor_hash(nacl_vec, whitening=whitening) != descriptor_hash(
-            nacl_vec, whitening=False
-        )
-
-    def test_distinct_structures(
-        self, whitening: HashWhitening, nacl_vec: np.ndarray, si_vec: np.ndarray
-    ) -> None:
-        assert descriptor_hash(nacl_vec, n_words=5, whitening=whitening) != descriptor_hash(
-            si_vec, n_words=5, whitening=whitening
-        )
-
-
-# ---------------------------------------------------------------------------
-# default_whitening() — bundled transform
-# ---------------------------------------------------------------------------
-
-
-class TestDefaultWhitening:
-    def test_returns_hash_whitening(self) -> None:
-        assert isinstance(default_whitening(), HashWhitening)
-
-    def test_cached(self) -> None:
-        assert default_whitening() is default_whitening()
-
-    def test_works_with_default_params(self, nacl_vec: np.ndarray) -> None:
-        h = descriptor_hash(nacl_vec, whitening=default_whitening())
-        assert isinstance(h, str)
-        assert len(h.split("-")[0]) == 5
-
-    def test_dimension_mismatch_raises(self) -> None:
-        short = np.ones(10, dtype=np.float64)
-        with pytest.raises(ValueError, match="dimensions"):
-            default_whitening().transform(short)

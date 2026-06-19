@@ -3,60 +3,32 @@
 Usage
 -----
 >>> from rinse_descriptor import descriptor, descriptor_hash
->>> x = descriptor(crystal)           # flat 1-D vector by default
->>> descriptor_hash(x)                # whitened SimHash, 1 proquint word
-'lusab'
->>> descriptor_hash(x, n_words=5)     # 80-bit hash
+>>> x = descriptor(crystal, flatten=True)
+>>> descriptor_hash(x)
 'lusab-babad-gutih-tugad-mudof'
 
 Algorithm
 ---------
 Given a flat descriptor vector **x** of length *D*:
 
-1. Project **x** onto the first ``n_bits`` principal components from PCA,
-   using the precomputed PCA model stored in ``pca_components.json``.
-2. Compute ``bits = (projected_x > 0)`` — the hash bit vector.
+1. Draw a deterministic random projection matrix **W** of shape
+   ``(n_bits, D)`` using :func:`numpy.random.default_rng` with seed 0.
+2. Compute ``bits = (W @ x > 0)`` — the SimHash bit vector.
 3. Pack the bits into ``n_words`` 16-bit integers and encode each as a
    five-character proquint word (``CVCVC`` pattern, 4+2+4+2+4 = 16 bits).
 
-The hash is **deterministic** and uses learned principal components
-rather than random projections. Two structurally similar descriptors
-will produce the same hash because they project to nearby points in
-the PCA subspace.
+The hash is **deterministic** for the same input vector length and
+``n_words`` value.  Two structurally similar descriptors will tend to
+produce the same hash because nearby vectors in ℝᴰ agree on most
+random-halfspace signs (Johnson–Lindenstrauss locality preservation).
 
 Proquint alphabet
 -----------------
 * Consonants (4-bit index): ``b d f g h j k l m n p r s t v z``
 * Vowels    (2-bit index):  ``a i o u``
-
-Whitening
----------
-By default, :func:`descriptor_hash` applies :func:`default_whitening`: a PCA
-transform synthesised from 2000 pseudo-random positive unit vectors drawn from
-an exponential distribution (mimicking the heavy-tailed, all-positive shape of
-L2-normalised power spectra).  The synthesis uses a fixed seed so the result
-is fully deterministic without shipping a data file.
-
-To use a transform fitted from your own structures::
-
-    wt = fit_hash_whitening(descriptor_many(structures))
-    wt.save("my_whitening.npz")          # persist for later
-    descriptor_hash(x, whitening=wt)
-
-To reload::
-
-    wt = HashWhitening.load("my_whitening.npz")
-    descriptor_hash(x, whitening=wt)
-
-To disable whitening entirely::
-
-    descriptor_hash(x, whitening=False)  # bare log1p only
 """
 
 from __future__ import annotations
-
-import json
-from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
@@ -73,61 +45,6 @@ _BITS_PER_WORD = 16
 
 #: Default number of proquint words produced by :func:`descriptor_hash`.
 DEFAULT_HASH_WORDS = 1
-
-# ---------------------------------------------------------------------------
-# PCA model loading
-# ---------------------------------------------------------------------------
-
-_PCA_CACHE: dict[str, tuple[NDArray[np.float64], NDArray[np.float64]]] = {}
-
-
-def _get_default_pca_path() -> Path:
-    """Get the default path to the bundled PCA components file."""
-    return Path(__file__).parent / "data" / "pca_components.json"
-
-
-def _load_pca_components(
-    pca_file: str | Path | None = None,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Load PCA components and mean from JSON file (cached).
-
-    Parameters
-    ----------
-    pca_file : str, Path, or None
-        Path to PCA components JSON file. If None, uses the bundled
-        data file in the package.
-
-    Returns
-    -------
-    components : ndarray
-        PCA components matrix of shape (n_components, n_features)
-    mean : ndarray
-        Mean vector used for centering, shape (n_features,)
-    """
-    if pca_file is None:
-        path = _get_default_pca_path()
-        cache_key = "__default__"
-    else:
-        path = Path(pca_file)
-        cache_key = str(pca_file)
-
-    if cache_key in _PCA_CACHE:
-        return _PCA_CACHE[cache_key]
-
-    if not path.exists():
-        raise FileNotFoundError(
-            f"PCA components file not found: {path}\n"
-            f"The bundled PCA model should be in the package data directory."
-        )
-
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-
-    components = np.array(data["components"], dtype=np.float64)
-    mean = np.array(data["mean"], dtype=np.float64)
-
-    _PCA_CACHE[cache_key] = (components, mean)
-    return components, mean
 
 
 def _int16_to_proquint(n: int) -> str:
@@ -155,38 +72,41 @@ def _proquint_to_int16(word: str) -> int:
 # ---------------------------------------------------------------------------
 # Offensive-word blocklist
 # ---------------------------------------------------------------------------
-# Any proquint word appearing in this set is replaced by flipping its LSB,
-# yielding a different valid proquint that is not a recognisable word.
-# All entries must be exactly 5 characters using the proquint alphabet.
+# Any proquint word containing a substring from this set is replaced by
+# flipping bits until a clean word is found.
+# Note: Only valid proquint characters (consonants: bdfghjklmnprstvz, vowels: aiou)
 _BLOCKED_WORDS: frozenset[str] = frozenset(
     [
-        "fagot",
-        "fagit",
-        "fagut",
-        "fagor",
+        "fag",
         "jihad",
-        "nudif",
+        "nud",
+        "bum",
+        "dik",  # Changed from "dic" - 'c' is not a valid proquint consonant
+        "fuk",
     ]
 )
 
 
 def _sanitise_word(word: str) -> str:
     """Replace a blocked proquint word by incrementing its value until clean."""
-    if word not in _BLOCKED_WORDS:
+    # Check if any blocked word appears as a substring
+    if not any(blocked in word for blocked in _BLOCKED_WORDS):
         return word
     value = _proquint_to_int16(word)
     replacement = word
     shift = 1
-    while replacement in _BLOCKED_WORDS:
+    # Keep trying different values until we find one without blocked substrings
+    while any(blocked in replacement for blocked in _BLOCKED_WORDS):
         replacement = _int16_to_proquint((value ^ shift) & 0xFFFF)
         shift <<= 1
+        if shift > 0xFFFF:  # Prevent infinite loop
+            break
     return replacement
 
 
 def descriptor_hash(
     x: NDArray[np.float64],
     n_words: int = DEFAULT_HASH_WORDS,
-    pca_file: str | Path | None = None,
 ) -> str:
     """Convert a descriptor vector to a pronounceable proquint hash string.
 
@@ -197,60 +117,30 @@ def descriptor_hash(
         :func:`~rinse_descriptor.power_spectrum_to_vector` or use
         ``descriptor(..., flatten=True)``.
     n_words:
-        Number of proquint words in the output (default 1).
-        Each word encodes 16 bits, so ``n_words=1`` → 16 hash bits total.
+        Number of proquint words in the output (default 5).
+        Each word encodes 16 bits, so ``n_words=5`` → 80 hash bits total.
         The output string has ``5 * n_words + (n_words - 1)`` characters
         (words joined by ``"-"``).
-    pca_file:
-        Path to the PCA components JSON file. If None (default), uses
-        the bundled PCA model from the package data directory.
 
     Returns
     -------
     str
-        Hyphen-separated proquint words, e.g. ``"lusab-babad"``.
+        Hyphen-separated proquint words, e.g. ``"lusab-babad-gutih-tugad-mudof"``.
 
     Notes
     -----
-    The descriptor is first centered using the PCA mean, then projected
-    onto the first ``n_bits`` principal components. The sign of each
-    projection coefficient determines the corresponding hash bit.
+    The projection matrix **W** is generated deterministically from
+    :func:`numpy.random.default_rng` with seed 0 for the given
+    ``(n_bits, input_dim)`` shape, so the hash is fully reproducible.
     """
     vec = np.asarray(x, dtype=np.float64).ravel()
-    if vec.shape[0] == 0:
+    dim = vec.shape[0]
+    if dim == 0:
         raise ValueError("Descriptor vector must not be empty.")
 
-    if whitening is False:
-        # Bare log1p fallback — no whitening
-        vec = np.log1p(np.abs(vec)) * np.sign(vec)
-    else:
-        w: HashWhitening = default_whitening() if whitening is None else whitening  # type: ignore[assignment]
-        vec = w.transform(vec)
-
     n_bits = n_words * _BITS_PER_WORD
-
-    # Load PCA components and mean
-    components, mean = _load_pca_components(pca_file)
-
-    # Check that we have enough components
-    if components.shape[0] < n_bits:
-        raise ValueError(
-            f"Need at least {n_bits} PCA components for {n_words} words, "
-            f"but only {components.shape[0]} available"
-        )
-
-    # Check dimension matches
-    if components.shape[1] != dim:
-        raise ValueError(
-            f"Descriptor dimension {dim} does not match PCA feature dimension "
-            f"{components.shape[1]}. Ensure the PCA was fit on the same descriptor type."
-        )
-
-    # Project onto first n_bits principal components
-    # PCA projection: centered_x @ components.T = (x - mean) @ components.T
-    centered = vec - mean
-    projection = components[:n_bits] @ centered  # (n_bits,)
-    bits: NDArray[np.bool_] = projection > 0  # (n_bits,)
+    W = np.random.default_rng(0).standard_normal((n_bits, dim))  # (n_bits, D)
+    bits: NDArray[np.bool_] = (W @ vec) > 0  # (n_bits,)
 
     words: list[str] = []
     for i in range(n_words):

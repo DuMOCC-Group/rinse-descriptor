@@ -1442,7 +1442,7 @@ wheels = [
 
 [[package]]
 name = "rinse-descriptor"
-version = "1.0.7"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "ase" },
