@@ -1,14 +1,17 @@
 """Compute RINSE descriptor hashes for all structures in the CSD.
 
 Outputs:
-    - csd_hashes.csv: CSV file with refcode and hash columns
-    - csd_descriptors.pkl: Pickle file with refcodes and high-dimensional descriptors
+    - csd_hashes_chunk_N.csv: CSV file with refcode and hash columns
+    - csd_descriptors_chunk_N.pkl: Pickle file with refcodes and high-dimensional descriptors
     - stdout: Tab-separated refcode and hash for each structure
 
 Usage:
-    python compute_csd_hashes.py
+    python compute_csd_hashes.py                    # Process all structures
+    python compute_csd_hashes.py 10 0               # Process chunk 0 of 10
+    python compute_csd_hashes.py 10 1               # Process chunk 1 of 10
 """
 
+import argparse
 import csv
 import pickle
 import sys
@@ -16,23 +19,75 @@ from io import StringIO
 from pathlib import Path
 
 from ccdc.io import EntryReader
-from rinse_descriptor import Crystal, descriptor, descriptor_hash
+from rParse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="Compute RINSE descriptor hashes for CSD structures"
+    )
+    parser.add_argument(
+        "num_chunks",
+        type=int,
+        nargs="?",
+        default=1,
+        help="Total number of chunks to split the CSD into (default: 1)",
+    )
+    parser.add_argument(
+        "chunk_id",
+        type=int,
+        nargs="?",
+        default=0,
+        help="Which chunk to process (0-indexed, default: 0)",
+    )
+    args = parser.parse_args()
 
+    if args.chunk_id >= args.num_chunks:
+        print(
+            f"Error: chunk_id ({args.chunk_id}) must be less than num_chunks ({args.num_chunks})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-def main():
-    """Process all CSD structures and compute their RINSE descriptor hashes."""
-    # Open CSD reader
+    # Open CSDcsv_file
     print("Opening CSD database...", file=sys.stderr)
     reader = EntryReader("CSD")
 
-    # Storage for descriptors - load existing data if available
-    pickle_file = Path("csd_descriptors.pkl")
-    resuming = False
-    if pickle_file.exists():
-        print("Loading existing descriptors from pickle file...", file=sys.stderr)
-        with open(pickle_file, "rb") as f:
-            existing_refcodes, existing_descriptors = pickle.load(f)
-            refcodes = list(existing_refcodes)
+    # Determine output file names based on chunking
+    if args.num_chunks > 1:
+        chunk_suffix = f"_chunk_{args.chunk_id}"
+        print(
+            f"Processing chunk {args.chunk_id} of {args.num_chunks}...", file=sys.stderr
+        )
+    else:
+        chunk_suffix = ""
+
+    pickle_file = Path(f"csd_descriptors{chunk_suffix}.pkl")
+    csv_file = Path(f"csd_hashes{chunk_suffix}.csv")
+
+        skipped_chunk = 0
+
+        # Iterate through all structures
+        print("Processing structures...", file=sys.stderr)
+        for entry_idx, entry in enumerate(reader):
+            refcode = entry.identifier
+            count += 1
+
+            # Determine if this entry belongs to our chunk
+            if args.num_chunks > 1:
+                if entry_idx % args.num_chunks != args.chunk_id:
+                    skipped_chunk += 1
+                    continue
+
+            if count % 1000 == 0:
+                if args.num_chunks > 1:
+                    print(
+                        f"Checked {count} structures (chunk: {count - skipped_chunk}), "
+                        f"added {new_count} new ({errors} errors)...",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(
+                        f"Checked {count} structures, added {new_count} new ({errors} errors)...",
+                        file=sys.stderr,
+                refcodes = list(existing_refcodes)
             descriptors = list(existing_descriptors)
         processed_refcodes = set(refcodes)
         print(f"Loaded {len(refcodes)} existing descriptors", file=sys.stderr)
@@ -94,7 +149,7 @@ def main():
 
                 # Store descriptor
                 refcodes.append(refcode)
-                descriptors.append(desc)
+                descriptors.appickle_file
                 processed_refcodes.add(refcode)
                 new_count += 1
 
@@ -102,17 +157,24 @@ def main():
                 hash_str = descriptor_hash(desc)
 
                 # Write to CSV and print to stdout
-                writer.writerow([refcode, hash_str])
-                print(f"{refcode}\t{hash_str}")
+        if args.num_chunks > 1:
+            print(
+                f"\nComplete! Checked {count} structures ({count - skipped_chunk} in chunk), "
+                f"added {new_count} new ({errors} errors).",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"\nComplete! Checked {count} structures, added {new_count} new ({errors} errors).",
+                file=sys.stderr,
+            )
+        print(f"Results saved to {csv_file}", file=sys.stderr)
 
-                # Flush periodically to save progress
-                if new_count % 100 == 0:
-                    csvfile.flush()
-                    with open("csd_descriptors.pkl", "wb") as f:
-                        pickle.dump((refcodes, descriptors), f)
-
-            except Exception as e:
-                errors += 1
+    # Final save of descriptors
+    with open(pickle_file, "wb") as f:
+        pickle.dump((refcodes, descriptors), f)
+    print(
+        f"Descriptors saved to {pickle_file}
                 print(f"Error processing {refcode}: {e}", file=sys.stderr)
                 continue
 

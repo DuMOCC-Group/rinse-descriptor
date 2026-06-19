@@ -9,18 +9,26 @@ This directory contains scripts for computing and updating the PCA-based hash mo
 Computes RINSE descriptor hashes for all structures in the Cambridge Structural Database (CSD).
 
 **Outputs:**
-- `csd_hashes.csv`: CSV file with refcode and hash columns
-- `csd_descriptors.pkl`: Pickle file with refcodes and high-dimensional descriptors
+- `csd_hashes.csv`: CSV file with refcode and hash columns (or `csd_hashes_chunk_N.csv` for chunks)
+- `csd_descriptors.pkl`: Pickle file with refcodes and high-dimensional descriptors (or `csd_descriptors_chunk_N.pkl`)
 
 **Usage:**
 ```bash
+# Process all structures sequentially
 python compute_csd_hashes.py
+
+# Parallel processing: split into 10 chunks, process chunk 0
+python compute_csd_hashes.py 10 0
+
+# Process chunk 5 of 10
+python compute_csd_hashes.py 10 5
 ```
 
 **Notes:**
 - Requires access to the CSD via the `ccdc` Python API
 - The script supports resumption: if interrupted, it will skip already-processed structures
 - Descriptors are saved incrementally every 100 structures
+- Chunking distributes entries by index: chunk N processes entries where `index % num_chunks == N`
 
 ### `compute_pca.py`
 
@@ -49,6 +57,37 @@ The JSON file contains:
 - `explained_variance_ratio`: Fraction of variance explained
 - `singular_values`: Singular values from SVD
 - `n_components`, `n_samples`, `n_features`: Model metadata
+
+### `merge_chunks.py`
+
+Merges chunk files produced by parallel runs of `compute_csd_hashes.py`.
+
+**Usage:** (sequential):**
+   ```bash
+   python compute_csd_hashes.py
+   ```
+
+1. **Collect descriptors:**
+   ```bash
+   # Submit array job with 10 parallel workers
+   sbatch submit_parallel.sh
+   
+   # After all jobs complete, merge results
+   python merge_chunks.py 10rge 10 chunk files into single files
+```
+
+**Outputs:**
+- `csd_descriptors.pkl`: Merged descriptors from all chunks
+- `csd_hashes.csv`: Merged hashes from all chunks
+
+### `submit_parallel.sh`
+
+Example SLURM batch script for parallel processing on HPC clusters.
+
+**Configuration:**
+- Edit `--array=0-9` to set number of parallel jobs
+- Edit `NUM_CHUNKS=10` to match array size
+- Adjust memory, time, and CPU requirements as needed
 
 ## Workflow
 
