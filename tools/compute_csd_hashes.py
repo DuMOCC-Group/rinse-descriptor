@@ -6,8 +6,7 @@ Outputs:
     - stdout: Tab-separated refcode and hash for each structure
 
 Usage:
-    python compute_csd_hashes.py                    # Use default synthetic whitening
-    python compute_csd_hashes.py csd_whitening.npz  # Use fitted whitening
+    python compute_csd_hashes.py
 """
 
 import csv

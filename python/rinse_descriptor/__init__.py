@@ -150,7 +150,6 @@ def descriptor_many(
     params: RinseParams | None = None,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron", "unity"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
-    flatten: bool = False,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a list of structures.
 
