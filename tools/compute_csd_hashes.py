@@ -27,6 +27,7 @@ def main():
 
     # Storage for descriptors - load existing data if available
     pickle_file = Path("csd_descriptors.pkl")
+    resuming = False
     if pickle_file.exists():
         print("Loading existing descriptors from pickle file...", file=sys.stderr)
         with open(pickle_file, "rb") as f:
@@ -35,6 +36,7 @@ def main():
             descriptors = list(existing_descriptors)
         processed_refcodes = set(refcodes)
         print(f"Loaded {len(refcodes)} existing descriptors", file=sys.stderr)
+        resuming = True
     else:
         refcodes = []
         descriptors = []
@@ -45,8 +47,17 @@ def main():
         writer = csv.writer(csvfile)
         writer.writerow(["refcode", "hash"])
 
+        # If resuming, write existing hashes to CSV first
+        if resuming:
+            print("Writing existing hashes to CSV...", file=sys.stderr)
+            for refcode, desc in zip(refcodes, descriptors):
+                hash_str = descriptor_hash(desc)
+                writer.writerow([refcode, hash_str])
+            csvfile.flush()
+
         # Progress counter
         count = 0
+        new_count = 0
         errors = 0
 
         # Iterate through all structures
@@ -56,7 +67,10 @@ def main():
             count += 1
 
             if count % 1000 == 0:
-                print(f"Processed {count} structures ({errors} errors)...", file=sys.stderr)
+                print(
+                    f"Checked {count} structures, added {new_count} new ({errors} errors)...",
+                    file=sys.stderr,
+                )
 
             # Skip if already processed
             if refcode in processed_refcodes:
@@ -82,6 +96,7 @@ def main():
                 refcodes.append(refcode)
                 descriptors.append(desc)
                 processed_refcodes.add(refcode)
+                new_count += 1
 
                 # Compute hash (single word)
                 hash_str = descriptor_hash(desc)
@@ -91,7 +106,7 @@ def main():
                 print(f"{refcode}\t{hash_str}")
 
                 # Flush periodically to save progress
-                if count % 100 == 0:
+                if new_count % 100 == 0:
                     csvfile.flush()
                     with open("csd_descriptors.pkl", "wb") as f:
                         pickle.dump((refcodes, descriptors), f)
@@ -101,7 +116,10 @@ def main():
                 print(f"Error processing {refcode}: {e}", file=sys.stderr)
                 continue
 
-        print(f"\nComplete! Processed {count} structures with {errors} errors.", file=sys.stderr)
+        print(
+            f"\nComplete! Checked {count} structures, added {new_count} new ({errors} errors).",
+            file=sys.stderr,
+        )
         print("Results saved to csd_hashes.csv", file=sys.stderr)
 
     # Final save of descriptors
