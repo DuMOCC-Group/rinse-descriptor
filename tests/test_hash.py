@@ -14,7 +14,7 @@ from rinse_descriptor import (
 )
 from rinse_descriptor._hash import (
     _BITS_PER_WORD,
-    _BLOCKED_WORDS,
+    _BLOCKED_SUBSTRINGS,
     _CONSONANTS,
     _VOWELS,
     _int16_to_proquint,
@@ -204,49 +204,20 @@ class TestHashToBits:
 
 
 class TestBlocklist:
-    def make_proquint_word(self, word: str) -> str:
-        if len(word) == 5:
-            pass
-        elif len(word) == 4:
-            if (
-                word[0] in _CONSONANTS
-                and word[1] in _VOWELS
-                and word[2] in _CONSONANTS
-                and word[3] in _VOWELS
-            ):
-                word = word + "b"  # pad to 5 chars
-            if (
-                word[0] in _VOWELS
-                and word[1] in _CONSONANTS
-                and word[2] in _VOWELS
-                and word[3] in _CONSONANTS
-            ):
-                word = word + "a"  # pad to 5 chars
-        elif len(word) == 3:
-            if word[0] in _CONSONANTS and word[1] in _VOWELS and word[2] in _CONSONANTS:
-                word = word + "ab"  # pad to 5 chars
-            elif word[0] in _VOWELS and word[1] in _CONSONANTS and word[2] in _VOWELS:
-                word = "b" + word + "b"  # pad to 5 chars
-        elif len(word) == 2:
-            if word[0] in _CONSONANTS and word[1] in _VOWELS:
-                word = word + "bab"  # pad to 5 chars
-            elif word[0] in _VOWELS and word[1] in _CONSONANTS:
-                word = "bab" + word  # pad to 5 chars
-        elif len(word) == 1:
-            if word[0] in _CONSONANTS:
-                word = word + "abab"  # pad to 5 chars
-            elif word[0] in _VOWELS:
-                word = "babab"  # pad to 5 chars
-        return word
+    # Build one minimal valid proquint word containing each blocked substring.
+    # e.g. "fag" → "fagab", "nud" → "nudab", "jihad" → "jihad" (already 5 chars)
+    _BLOCKED_EXAMPLES: list[str] = [
+        "fagab",  # contains "fag"
+        "nudab",  # contains "nud"
+        "jihad",  # contains "jihad"
+    ]
 
     def test_blocked_words_replaced(self) -> None:
-        for word in _BLOCKED_WORDS:
-            word = self.make_proquint_word(word)
+        for word in self._BLOCKED_EXAMPLES:
             assert _sanitise_word(word) != word
 
     def test_replacement_is_valid_proquint(self) -> None:
-        for word in _BLOCKED_WORDS:
-            word = self.make_proquint_word(word)
+        for word in self._BLOCKED_EXAMPLES:
             replacement = _sanitise_word(word)
             assert len(replacement) == 5
             assert replacement[0] in _CONSONANTS
@@ -255,18 +226,19 @@ class TestBlocklist:
             assert replacement[3] in _VOWELS
             assert replacement[4] in _CONSONANTS
 
-    def test_replacement_not_in_blocklist(self) -> None:
-        for word in _BLOCKED_WORDS:
-            word = self.make_proquint_word(word)
-            assert _sanitise_word(word) not in _BLOCKED_WORDS
+    def test_replacement_not_blocked(self) -> None:
+        for word in self._BLOCKED_EXAMPLES:
+            replacement = _sanitise_word(word)
+            assert not any(sub in replacement for sub in _BLOCKED_SUBSTRINGS)
 
-    def test_no_blocked_word_in_hash_output(self) -> None:
+    def test_no_blocked_substring_in_hash_output(self) -> None:
         rng = np.random.default_rng(42)
         for _ in range(200):
             vec = rng.standard_normal(128)
             words = descriptor_hash(vec, n_words=8).split("-")
             for word in words:
-                assert word not in _BLOCKED_WORDS, f"Blocked word {word!r} appeared in hash"
+                for sub in _BLOCKED_SUBSTRINGS:
+                    assert sub not in word, f"Blocked substring {sub!r} appeared in hash word {word!r}"
 
     def test_non_blocked_word_unchanged(self) -> None:
         safe = "babab"
