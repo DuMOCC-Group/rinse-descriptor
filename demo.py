@@ -1,12 +1,3 @@
-# /// script
-# requires-python = ">=3.14"
-# dependencies = [
-#     "marimo>=0.23.9",
-#     "matplotlib",
-#     "numpy",
-#     "rinse-descriptor @ git+https://github.com/DuMOCC-Group/rinse-descriptor.git",
-# ]
-# ///
 """RINSE Descriptor Demo – marimo notebook.
 
 Run with:
@@ -19,6 +10,17 @@ import marimo
 
 __generated_with = "0.23.9"
 app = marimo.App(width="medium")
+
+
+@app.cell(hide_code=True)
+def _():
+    # Pre-load cctbx C extensions before marimo activates kernel I/O captures.
+    # boost.python writes to C-level stdout on first import; doing it here
+    # (synchronously, before any output capture is active) avoids a segfault.
+    from cctbx import xray as _xray  # noqa: F401
+    from iotbx import cif as _cif  # noqa: F401
+
+    return
 
 
 @app.cell(hide_code=True)
@@ -36,16 +38,15 @@ def _():
     import numpy as np
     from rinse_descriptor import (
         DEFAULT_HASH_WORDS,
-        Crystal,
         RinseParams,
         descriptor,
         descriptor_hash,
+        load_cif,
     )
     from rinse_descriptor._descriptor import compute_power_spectrum, power_spectrum_to_vector
     from rinse_descriptor._structure_factors import compute_structure_factors
 
     return (
-        Crystal,
         DEFAULT_HASH_WORDS,
         RinseParams,
         compute_power_spectrum,
@@ -53,6 +54,7 @@ def _():
         dataclasses,
         descriptor,
         descriptor_hash,
+        load_cif,
         np,
         plt,
         power_spectrum_to_vector,
@@ -95,14 +97,13 @@ def _(mo):
     l_min and l_max set the number of spherical harmonic levels.
     Keep l_max low, as the basis functions are relatively slow
     to compute. You may want to set l_min to 4 to remove l_0
-    (monopole) and l_3 (quadrupole levels). Monopoles (if
+    (monopole) and l_2 (quadrupole levels). Monopoles (if
     present) dominate the descriptor as they have no negative
     regions. Quadrupoles vanish in cubic symmetry crystals,
     so contribute no information. "Include odd l" is an
     option to demonstrate that the odd levels (dipole,
-    octopole...) are always zero because of Friedel's law, if
-    the structure factor calculations neglect anomalous
-    dispersion (they do).
+    octopole...) are always zero because of Friedel's law,
+    at least for centrosymmetric structures.
 
     sin_theta_over_lambda_max controls how far out strucure
     factors are calculated. This is generally the slowest step.
@@ -123,7 +124,7 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
 
     n_max_slider = mo.ui.slider(
         start=2,
-        stop=64,
+        stop=256,
         step=2,
         value=_defaults["n_max"],
         label="n_max  (radial basis functions, n = 0 … n_max−1)",
@@ -159,7 +160,7 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         label="Radial basis",
     )
     ff_dd = mo.ui.dropdown(
-        options=["xray", "electron", "neutron", "unity"],
+        options=["xray", "electron", "neutron"],
         value="xray",
         label="Form factor type",
     )
@@ -233,7 +234,6 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(
-    Crystal,
     RinseParams,
     basis_dd,
     cif_upload,
@@ -244,6 +244,7 @@ def _(
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
+    load_cif,
     log1p_compression_cb,
     n_max_slider,
     norm_dd,
@@ -264,7 +265,7 @@ def _(
                 _tmp.write(_f.contents)
                 _tmp_path = _tmp.name
             try:
-                _crystal = Crystal.from_cif(_tmp_path)
+                _crystal = load_cif(_tmp_path)
                 _struct_label = _f.name
             finally:
                 os.unlink(_tmp_path)
@@ -495,16 +496,17 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(
-    Crystal,
     P,
     compute_error,
     crystal,
     dataclasses,
     descriptor,
+    descriptor_hash,
     ff_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
+    n_words_slider,
     norm_dd,
     np,
     params,
@@ -514,6 +516,8 @@ def _(
         mo.stop(True)
     _base = crystal
 
+    from cctbx import crystal as _cctbx_crystal
+
     _scales = np.round(np.arange(0.90, 1.1001, 0.01), 2)
     _params = dataclasses.replace(
         params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
@@ -521,15 +525,13 @@ def _(
 
     _scaled_descriptors = []
     for _scale in _scales:
-        _scaled = Crystal(
-            cell=_base.cell * _scale,
-            positions=_base.positions * _scale,
-            species=_base.species.copy(),
-            occupancies=_base.occupancies.copy(),
-            u_iso=_base.u_iso.copy(),
-            u_aniso=_base.u_aniso.copy(),
-            pbc=_base.pbc.copy(),
+        _uc = list(_base.unit_cell().parameters())  # (a, b, c, alpha, beta, gamma)
+        _scaled_uc = tuple(p * _scale if i < 3 else p for i, p in enumerate(_uc))
+        _new_sym = _cctbx_crystal.symmetry(
+            unit_cell=_scaled_uc,
+            space_group_info=_base.space_group_info(),
         )
+        _scaled = _base.customized_copy(crystal_symmetry=_new_sym)
         _scaled_descriptors.append(
             descriptor(
                 _scaled,
@@ -550,6 +552,10 @@ def _(
         for _descriptor in _descriptor_matrix
     ]
 
+    _hashes = [ descriptor_hash(_descriptor, n_words=n_words_slider.value)
+                for _descriptor in _descriptor_matrix
+              ]
+
     _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
         _descriptor_matrix,
@@ -564,7 +570,7 @@ def _(
 
     _yticks1 = list(range(0, len(_scales), 2))
     _ax1.set_yticks(_yticks1)
-    _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1]
+    _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f}) ({_hashes[i]})" for i in _yticks1]
     _ax1.set_yticklabels(_ylabels1, fontsize=8)
 
     _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
@@ -613,16 +619,17 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(
-    Crystal,
     P,
     compute_error,
     crystal,
     dataclasses,
     descriptor,
+    descriptor_hash,
     ff_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
+    n_words_slider,
     norm_dd,
     np,
     params,
@@ -633,26 +640,39 @@ def _(
 
     _base = crystal
 
+    from cctbx import crystal as _cctbx_crystal
+    from cctbx import uctbx as _uctbx
+
     _scales = np.round(np.arange(-0.1, 0.1001, 0.01), 2)
     _params = dataclasses.replace(
         params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
     )
 
+    # Expand to P1 once; fractional coordinates are invariant under cell shearing.
+    _p1 = _base.expand_to_p1()
+    _orth0 = np.array(_p1.unit_cell().orthogonalization_matrix()).reshape(3, 3)
+
     _scaled_descriptors = []
     for _scale in _scales:
-        _scaled_cell = np.matmul(_base.cell, np.matrix([[1, _scale, 0], [0, 1, 0], [0, 0, 1]]))
-        _scaled = Crystal(
-            cell=_scaled_cell,
-            positions=_base.positions.copy(),
-            species=_base.species.copy(),
-            occupancies=_base.occupancies.copy(),
-            u_iso=_base.u_iso.copy(),
-            u_aniso=_base.u_aniso.copy(),
-            pbc=_base.pbc.copy(),
+        # Apply shear [[1,s,0],[0,1,0],[0,0,1]] to lattice vectors.
+        # cctbx orth columns = a, b, c; shear via left-multiplication by M^T.
+        _M_T = np.array([[1, 0, 0], [_scale, 1, 0], [0, 0, 1]])
+        _new_orth = _M_T @ _orth0
+        _a_v, _b_v, _c_v = _new_orth[:, 0], _new_orth[:, 1], _new_orth[:, 2]
+        _a = float(np.linalg.norm(_a_v))
+        _b = float(np.linalg.norm(_b_v))
+        _c = float(np.linalg.norm(_c_v))
+        _alpha = float(np.degrees(np.arccos(np.clip(np.dot(_b_v, _c_v) / (_b * _c), -1, 1))))
+        _beta = float(np.degrees(np.arccos(np.clip(np.dot(_a_v, _c_v) / (_a * _c), -1, 1))))
+        _gamma = float(np.degrees(np.arccos(np.clip(np.dot(_a_v, _b_v) / (_a * _b), -1, 1))))
+        _new_sym = _cctbx_crystal.symmetry(
+            unit_cell=_uctbx.unit_cell((_a, _b, _c, _alpha, _beta, _gamma)),
+            space_group_symbol="P 1",
         )
+        _sheared = _p1.customized_copy(crystal_symmetry=_new_sym)
         _scaled_descriptors.append(
             descriptor(
-                _scaled,
+                _sheared,
                 params=_params,
                 structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
@@ -670,6 +690,10 @@ def _(
         for _descriptor in _descriptor_matrix
     ]
 
+    _hashes = [ descriptor_hash(_descriptor, n_words=n_words_slider.value)
+                for _descriptor in _descriptor_matrix
+              ]
+
     _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
         _descriptor_matrix,
@@ -684,7 +708,7 @@ def _(
 
     _yticks1 = list(range(0, len(_scales), 2))
     _ax1.set_yticks(_yticks1)
-    _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1]
+    _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f}) ({_hashes[i]})" for i in _yticks1]
     _ax1.set_yticklabels(_ylabels1, fontsize=8)
 
     _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
@@ -732,16 +756,17 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(
-    Crystal,
     P,
     compute_error,
     crystal,
     dataclasses,
     descriptor,
+    descriptor_hash,
     ff_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
+    n_words_slider,
     norm_dd,
     np,
     params,
@@ -758,20 +783,11 @@ def _(
 
     _scaled_descriptors = []
     for _scale in _scales:
-        _occupancies = _base.occupancies.copy()
-        _occupancies[0] = _scale
-        _scaled = Crystal(
-            cell=_base.cell.copy(),
-            positions=_base.positions.copy(),
-            species=_base.species.copy(),
-            occupancies=_occupancies,
-            u_iso=_base.u_iso.copy(),
-            u_aniso=_base.u_aniso.copy(),
-            pbc=_base.pbc.copy(),
-        )
+        _modified = _base.deep_copy_scatterers()
+        _modified.scatterers()[0].occupancy = float(_scale)
         _scaled_descriptors.append(
             descriptor(
-                _scaled,
+                _modified,
                 params=_params,
                 structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
@@ -789,6 +805,10 @@ def _(
         for _descriptor in _descriptor_matrix
     ]
 
+    _hashes = [ descriptor_hash(_descriptor, n_words=n_words_slider.value)
+                for _descriptor in _descriptor_matrix
+              ]
+
     _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
         _descriptor_matrix,
@@ -803,7 +823,7 @@ def _(
 
     _yticks1 = list(range(0, len(_scales), 2))
     _ax1.set_yticks(_yticks1)
-    _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f})" for i in _yticks1]
+    _ylabels1 = [f"{_scales[i]:.2f}x ({_distances[i]:.5f}) ({_hashes[i]})" for i in _yticks1]
     _ax1.set_yticklabels(_ylabels1, fontsize=8)
 
     _cbar1 = _fig.colorbar(_image1, ax=_ax1, shrink=0.9)
@@ -858,7 +878,6 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(
-    Crystal,
     RinseParams,
     basis_dd,
     cif_upload2,
@@ -869,6 +888,7 @@ def _(
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
+    load_cif,
     log1p_compression_cb,
     n_max_slider,
     norm_dd,
@@ -888,7 +908,7 @@ def _(
                 _tmp.write(_f.contents)
                 _tmp_path = _tmp.name
             try:
-                _crystal = Crystal.from_cif(_tmp_path)
+                _crystal = load_cif(_tmp_path)
                 _struct_label = _f.name
             finally:
                 os.unlink(_tmp_path)

@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 from rinse_descriptor import (
-    Crystal,
     descriptor,
     descriptor_hash,
     hash_to_bits,
+    load_cif,
 )
 from rinse_descriptor._hash import (
     _BITS_PER_WORD,
@@ -27,14 +27,12 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(scope="module")
 def nacl_vec() -> np.ndarray:
-    c = Crystal.from_cif(FIXTURES_DIR / "nacl.cif")
-    return descriptor(c)
+    return descriptor(load_cif(FIXTURES_DIR / "nacl.cif"))
 
 
 @pytest.fixture(scope="module")
 def si_vec() -> np.ndarray:
-    c = Crystal.from_cif(FIXTURES_DIR / "si.cif")
-    return descriptor(c)
+    return descriptor(load_cif(FIXTURES_DIR / "si.cif"))
 
 
 # ---------------------------------------------------------------------------

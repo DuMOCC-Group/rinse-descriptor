@@ -2,14 +2,17 @@
 
 Quick start
 -----------
->>> from ase.build import bulk
->>> from rinse_descriptor import descriptor, RinseParams
->>> atoms = bulk("NaCl", "rocksalt", a=5.64)
->>> x = descriptor(atoms)           # 1-D vector by default
+>>> from rinse_descriptor import load_cif, descriptor, RinseParams
+>>> xrs = load_cif("nacl.cif")
+>>> x = descriptor(xrs)             # 1-D vector by default
 >>> x.shape == (RinseParams().descriptor_length,)
 True
 
->>> X = descriptor_many([atoms, atoms])
+Alternatively pass a CIF path directly::
+
+    >>> x = descriptor("nacl.cif")
+
+>>> X = descriptor_many([xrs, xrs])
 """
 
 from __future__ import annotations
@@ -17,12 +20,12 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Sequence
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ._crystal import Crystal
+from ._crystal import load_cif
 from ._descriptor import (
     RinseParams,
     compute_power_spectrum,
@@ -39,7 +42,7 @@ from ._structure_factors import (
 
 __version__ = "0.1.0"
 __all__ = [
-    "Crystal",
+    "load_cif",
     "RinseParams",
     "FormFactorType",
     "StructureFactorType",
@@ -59,9 +62,8 @@ def descriptor(
     atoms: object,
     *,
     params: RinseParams | None = None,
-    form_factor_type: FormFactorType | Literal["xray", "electron", "neutron", "unity"] = "xray",
+    form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
-    b_factors: NDArray[np.float64] | None = None,
     debug: bool = False,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a single structure.
@@ -69,20 +71,17 @@ def descriptor(
     Parameters
     ----------
     atoms:
-        An :class:`ase.Atoms` object, a :class:`~rinse_descriptor.Crystal`, or a path
-        to a CIF file (str / :class:`pathlib.Path`).
+        A :class:`cctbx.xray.structure` or a path to a CIF file
+        (``str`` / :class:`pathlib.Path`).
     params:
-        Descriptor hyper-parameters.  Uses :class:`RinseParams` defaults if *None*
-        (see :class:`RinseParams` for current values).
+        Descriptor hyper-parameters.  Uses :class:`RinseParams` defaults if *None*.
         ``params.log1p`` and ``params.l2`` control post-processing normalisation.
-        ``params.flatten`` controls whether the output is a 1-D vector (default *True*)
-        or the 2-D ``(n_max, n_l_levels)`` matrix.
+        ``params.flatten`` controls whether the output is a 1-D vector (default
+        *True*) or the 2-D ``(n_max, n_l_levels)`` matrix.
     form_factor_type:
-        ``"xray"`` | ``"electron"`` | ``"neutron"`` | ``"unity"``.
+        ``"xray"`` | ``"electron"`` | ``"neutron"``.
     structure_factor_type:
         ``"F2"`` (default) | ``"F"``.
-    b_factors:
-        Per-atom isotropic B-factors in Å².  *None* → unit B-factors (1 Å²).
 
     Returns
     -------
@@ -96,17 +95,16 @@ def descriptor(
     if debug:
         if isinstance(atoms, (str, pathlib.Path)):
             print(f"[rinse_descriptor] input: CIF {atoms}", file=sys.stderr)
-        elif isinstance(atoms, Crystal):
-            print(f"[rinse_descriptor] input: Crystal ({atoms.n_atoms} atoms)", file=sys.stderr)
         else:
             print(f"[rinse_descriptor] input: {type(atoms).__name__}", file=sys.stderr)
 
     _t = time.perf_counter()
-    crystal = _to_crystal(atoms)
+    xrs = _to_xrs(atoms)
     if debug:
         print(
-            f"[rinse_descriptor]   load structure:     {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
-            f"({crystal.n_atoms} atoms)",
+            f"[rinse_descriptor]   load structure:     "
+            f"{(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"({xrs.scatterers().size()} scatterers in asym unit)",
             file=sys.stderr,
         )
 
@@ -115,16 +113,16 @@ def descriptor(
 
     _t = time.perf_counter()
     reflections = compute_structure_factors(
-        crystal,
+        xrs,
         sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
         form_factor_type=form_factor_type,
         structure_factor_type=structure_factor_type,
-        b_factors=b_factors,
         debug=debug,
     )
     if debug:
         print(
-            f"[rinse_descriptor]   structure factors:  {(time.perf_counter() - _t) * 1e3:8.2f} ms  "
+            f"[rinse_descriptor]   structure factors:  "
+            f"{(time.perf_counter() - _t) * 1e3:8.2f} ms  "
             f"({len(reflections)} reflections)",
             file=sys.stderr,
         )
@@ -133,11 +131,13 @@ def descriptor(
     P = compute_power_spectrum(reflections, params=params, debug=debug)
     if debug:
         print(
-            f"[rinse_descriptor]   power spectrum:     {(time.perf_counter() - _t) * 1e3:8.2f} ms",
+            f"[rinse_descriptor]   power spectrum:     "
+            f"{(time.perf_counter() - _t) * 1e3:8.2f} ms",
             file=sys.stderr,
         )
         print(
-            f"[rinse_descriptor]   TOTAL:              {(time.perf_counter() - t0) * 1e3:8.2f} ms",
+            f"[rinse_descriptor]   TOTAL:              "
+            f"{(time.perf_counter() - t0) * 1e3:8.2f} ms",
             file=sys.stderr,
         )
 
@@ -148,7 +148,7 @@ def descriptor_many(
     structures: Sequence[object],
     *,
     params: RinseParams | None = None,
-    form_factor_type: FormFactorType | Literal["xray", "electron", "neutron", "unity"] = "xray",
+    form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a list of structures.
@@ -156,18 +156,15 @@ def descriptor_many(
     Parameters
     ----------
     structures:
-        Iterable of :class:`ase.Atoms`, :class:`~rinse_descriptor.Crystal`, or CIF paths.
+        Iterable of :class:`cctbx.xray.structure` objects or CIF paths.
     params:
         Shared descriptor hyper-parameters.
-        ``params.log1p`` and ``params.l2`` control post-processing normalisation.
     form_factor_type, structure_factor_type:
         Passed to :func:`descriptor`.
-    flatten:
-        If *True*, return shape (N, n_max*n_l_levels); otherwise (N, n_max, n_l_levels).
 
     Returns
     -------
-    ndarray of shape (N, n_max*n_l_levels) [default, flatten=True] or
+    ndarray of shape (N, descriptor_length) [default, flatten=True] or
     (N, n_max, n_l_levels) [flatten=False].
     """
     results = [
@@ -187,18 +184,15 @@ def descriptor_many(
 # ---------------------------------------------------------------------------
 
 
-def _to_crystal(atoms: object) -> Crystal:
-    """Accept ase.Atoms, Crystal, str (CIF path), or pathlib.Path."""
+def _to_xrs(atoms: object) -> Any:
+    """Accept a cctbx xray.structure, str (CIF path), or pathlib.Path."""
     import pathlib
 
-    if isinstance(atoms, Crystal):
-        return atoms
     if isinstance(atoms, (str, pathlib.Path)):
-        return Crystal.from_cif(str(atoms))
-    # Assume ASE Atoms (duck-typed)
-    try:
-        return Crystal.from_ase(atoms)
-    except TypeError as exc:
-        raise TypeError(
-            f"Expected ase.Atoms, rinse_descriptor.Crystal, or a CIF file path, got {type(atoms)}"
-        ) from exc
+        return load_cif(atoms)
+    # Accept any cctbx xray.structure (duck-typing; avoids a hard import of the C type)
+    if hasattr(atoms, "structure_factors") and hasattr(atoms, "scatterers"):
+        return atoms
+    raise TypeError(
+        f"Expected a cctbx xray.structure or a CIF file path, got {type(atoms)}"
+    )

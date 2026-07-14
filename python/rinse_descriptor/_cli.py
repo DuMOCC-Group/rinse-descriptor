@@ -106,7 +106,7 @@ def _make_parser() -> argparse.ArgumentParser:
     sf.add_argument(
         "--form-factor",
         default="xray",
-        choices=["xray", "electron", "neutron", "unity"],
+        choices=["xray", "electron", "neutron"],
         dest="form_factor_type",
         help="Atomic form factor type.",
     )
@@ -188,7 +188,7 @@ def _compute_one(
         cif_path,
         params=params,
         form_factor_type=cast(
-            "Literal['xray','electron','neutron','unity'] | FormFactorType",
+            "Literal['xray','electron','neutron'] | FormFactorType",
             form_factor_type,
         ),
         structure_factor_type=cast(
