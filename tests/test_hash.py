@@ -238,7 +238,7 @@ class TestBlocklist:
             words = descriptor_hash(vec, n_words=8).split("-")
             for word in words:
                 for sub in _BLOCKED_SUBSTRINGS:
-                    assert sub not in word, f"Blocked substring {sub!r} appeared in hash word {word!r}"
+                    assert sub not in word, f"Blocked substring {sub!r} in hash word {word!r}"
 
     def test_non_blocked_word_unchanged(self) -> None:
         safe = "babab"
