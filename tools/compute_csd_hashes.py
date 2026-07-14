@@ -60,9 +60,7 @@ def main():
     # Determine output file names based on chunking
     if args.num_chunks > 1:
         chunk_suffix = f"_chunk_{args.chunk_id}"
-        print(
-            f"Processing chunk {args.chunk_id} of {args.num_chunks}...", file=sys.stderr
-        )
+        print(f"Processing chunk {args.chunk_id} of {args.num_chunks}...", file=sys.stderr)
     else:
         chunk_suffix = ""
 
@@ -198,4 +196,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

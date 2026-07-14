@@ -552,9 +552,10 @@ def _(
         for _descriptor in _descriptor_matrix
     ]
 
-    _hashes = [ descriptor_hash(_descriptor, n_words=n_words_slider.value)
-                for _descriptor in _descriptor_matrix
-              ]
+    _hashes = [
+        descriptor_hash(_descriptor, n_words=n_words_slider.value)
+        for _descriptor in _descriptor_matrix
+    ]
 
     _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
@@ -690,9 +691,10 @@ def _(
         for _descriptor in _descriptor_matrix
     ]
 
-    _hashes = [ descriptor_hash(_descriptor, n_words=n_words_slider.value)
-                for _descriptor in _descriptor_matrix
-              ]
+    _hashes = [
+        descriptor_hash(_descriptor, n_words=n_words_slider.value)
+        for _descriptor in _descriptor_matrix
+    ]
 
     _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(
@@ -805,9 +807,10 @@ def _(
         for _descriptor in _descriptor_matrix
     ]
 
-    _hashes = [ descriptor_hash(_descriptor, n_words=n_words_slider.value)
-                for _descriptor in _descriptor_matrix
-              ]
+    _hashes = [
+        descriptor_hash(_descriptor, n_words=n_words_slider.value)
+        for _descriptor in _descriptor_matrix
+    ]
 
     _fig, (_ax1, _ax2) = plt.subplots(2, 1, figsize=(12, 6))
     _image1 = _ax1.imshow(

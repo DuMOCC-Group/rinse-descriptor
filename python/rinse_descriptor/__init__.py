@@ -131,13 +131,11 @@ def descriptor(
     P = compute_power_spectrum(reflections, params=params, debug=debug)
     if debug:
         print(
-            f"[rinse_descriptor]   power spectrum:     "
-            f"{(time.perf_counter() - _t) * 1e3:8.2f} ms",
+            f"[rinse_descriptor]   power spectrum:     {(time.perf_counter() - _t) * 1e3:8.2f} ms",
             file=sys.stderr,
         )
         print(
-            f"[rinse_descriptor]   TOTAL:              "
-            f"{(time.perf_counter() - t0) * 1e3:8.2f} ms",
+            f"[rinse_descriptor]   TOTAL:              {(time.perf_counter() - t0) * 1e3:8.2f} ms",
             file=sys.stderr,
         )
 
@@ -193,6 +191,4 @@ def _to_xrs(atoms: object) -> Any:
     # Accept any cctbx xray.structure (duck-typing; avoids a hard import of the C type)
     if hasattr(atoms, "structure_factors") and hasattr(atoms, "scatterers"):
         return atoms
-    raise TypeError(
-        f"Expected a cctbx xray.structure or a CIF file path, got {type(atoms)}"
-    )
+    raise TypeError(f"Expected a cctbx xray.structure or a CIF file path, got {type(atoms)}")

@@ -14,9 +14,7 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(description="Merge CSD hash chunk files")
-    parser.add_argument(
-        "num_chunks", type=int, help="Total number of chunk files to merge"
-    )
+    parser.add_argument("num_chunks", type=int, help="Total number of chunk files to merge")
     args = parser.parse_args()
 
     all_refcodes = []

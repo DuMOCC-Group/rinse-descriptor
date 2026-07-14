@@ -137,6 +137,7 @@ _BLOCKED_SUBSTRINGS: tuple[str, ...] = ("fag", "nud", "jihad")
 
 def _sanitise_word(word: str) -> str:
     """Replace a blocked proquint word by incrementing its value until clean."""
+
     def _is_blocked(w: str) -> bool:
         return any(sub in w for sub in _BLOCKED_SUBSTRINGS)
 
