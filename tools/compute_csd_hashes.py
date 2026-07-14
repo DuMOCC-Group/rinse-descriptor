@@ -21,7 +21,7 @@ from io import StringIO
 from pathlib import Path
 
 from ccdc.io import EntryReader
-from rinse_descriptor import Crystal, descriptor, descriptor_hash
+from rinse_descriptor import descriptor, descriptor_hash, load_cif
 
 
 def main():
@@ -137,17 +137,18 @@ def main():
                 # Get CIF string
                 cif_string = entry.to_string(format="cif")
 
-                # Create Crystal from CIF string
+                # Create xray.structure from CIF string
                 try:
-                    crystal = Crystal.from_cif(StringIO(cif_string))
+                    xrs = load_cif(StringIO(cif_string))
                 except Exception:
                     continue
 
-                if len(crystal.positions) == 0 or len(crystal.positions) > 200:
+                n_atoms = xrs.scatterers().size()
+                if n_atoms == 0 or n_atoms > 200:
                     continue
 
                 # Compute descriptor
-                desc = descriptor(crystal)
+                desc = descriptor(xrs)
 
                 # Store descriptor
                 refcodes.append(refcode)
