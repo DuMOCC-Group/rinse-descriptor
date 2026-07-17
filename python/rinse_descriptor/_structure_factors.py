@@ -28,8 +28,10 @@ Structure factor types
 * ``"F"``  — |F(hkl)|
 * ``"F2"`` — |F(hkl)|²  (default)
 
-Displacement parameters are taken directly from the :class:`cctbx.xray.structure`
-as parsed from the CIF file.
+By default all atoms are assigned isotropic thermal motion with U_iso = 0.01 Å²,
+giving a consistent baseline independent of CIF completeness.  Pass
+``use_reported_adps=True`` to use the displacement parameters as stored in the
+:class:`cctbx.xray.structure` (isotropic or anisotropic, as parsed from the CIF).
 """
 
 from __future__ import annotations
@@ -122,6 +124,7 @@ def compute_structure_factors(
     sin_theta_over_lambda_max: float = 2.0,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
+    use_reported_adps: bool = False,
     debug: bool = False,
 ) -> ReflectionList:
     """Compute structure factors and return a :class:`ReflectionList`.
@@ -136,6 +139,9 @@ def compute_structure_factors(
         Scattering factor type. ``"xray"`` | ``"electron"`` | ``"neutron"``.
     structure_factor_type:
         Output structure factor type. ``"F2"`` | ``"F"``.
+    use_reported_adps:
+        If *True*, use displacement parameters from the CIF.  Default *False*:
+        all atoms are reset to isotropic U_iso = 0.01 Å².
     """
     ff_type = FormFactorType(form_factor_type)
     sf_type = StructureFactorType(structure_factor_type)
@@ -148,7 +154,7 @@ def compute_structure_factors(
     recip = np.linalg.inv(orth.T).T  # rows = a*, b*, c*
 
     _t = time.perf_counter()
-    hkl_arr, F_vals = _calc_cctbx(xrs, d_min, ff_type)
+    hkl_arr, F_vals = _calc_cctbx(xrs, d_min, ff_type, use_reported_adps=use_reported_adps)
     if debug:
         print(
             f"[rinse_descriptor] sf: calculate F(hkl):"
@@ -193,6 +199,8 @@ def _calc_cctbx(
     xrs: Any,
     d_min: float,
     ff_type: FormFactorType,
+    *,
+    use_reported_adps: bool = False,
 ) -> tuple[NDArray[np.int32], NDArray[np.complex128]]:
     """Compute F(hkl) using cctbx and expand to the full reciprocal sphere.
 
@@ -206,6 +214,17 @@ def _calc_cctbx(
        this directly yields the full sphere.
     """
     xrs_calc = xrs.deep_copy_scatterers()
+
+    if not use_reported_adps:
+        # Reset every atom to isotropic U_iso = 0.01 Å², giving a consistent
+        # baseline regardless of what (if anything) was reported in the CIF.
+        xrs_calc.convert_to_isotropic()
+        scs = xrs_calc.scatterers()
+        for i in range(scs.size()):
+            sc = scs[i]
+            sc.u_iso = 0.01
+            scs[i] = sc
+
     xrs_calc.scattering_type_registry(table=_CCTBX_TABLES[ff_type])
 
     fc_asym = xrs_calc.structure_factors(

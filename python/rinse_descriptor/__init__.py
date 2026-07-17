@@ -25,6 +25,7 @@ from typing import Any, Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from . import _cctbx_win_patch  # noqa: F401 – must precede any iotbx/cctbx import
 from ._crystal import load_cif
 from ._descriptor import (
     RinseParams,
@@ -64,6 +65,7 @@ def descriptor(
     params: RinseParams | None = None,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
+    use_reported_adps: bool = False,
     debug: bool = False,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a single structure.
@@ -82,6 +84,9 @@ def descriptor(
         ``"xray"`` | ``"electron"`` | ``"neutron"``.
     structure_factor_type:
         ``"F2"`` (default) | ``"F"``.
+    use_reported_adps:
+        If *True*, use displacement parameters from the CIF.  Default *False*:
+        all atoms are reset to isotropic U_iso = 0.01 Å².
 
     Returns
     -------
@@ -117,6 +122,7 @@ def descriptor(
         sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
         form_factor_type=form_factor_type,
         structure_factor_type=structure_factor_type,
+        use_reported_adps=use_reported_adps,
         debug=debug,
     )
     if debug:
@@ -148,6 +154,7 @@ def descriptor_many(
     params: RinseParams | None = None,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
+    use_reported_adps: bool = False,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a list of structures.
 
@@ -159,6 +166,9 @@ def descriptor_many(
         Shared descriptor hyper-parameters.
     form_factor_type, structure_factor_type:
         Passed to :func:`descriptor`.
+    use_reported_adps:
+        If *True*, use displacement parameters from the CIF.  Default *False*:
+        all atoms are reset to isotropic U_iso = 0.01 Å².
 
     Returns
     -------
@@ -171,6 +181,7 @@ def descriptor_many(
             params=params,
             form_factor_type=form_factor_type,
             structure_factor_type=structure_factor_type,
+            use_reported_adps=use_reported_adps,
         )
         for s in structures
     ]

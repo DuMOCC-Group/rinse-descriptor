@@ -8,10 +8,21 @@ I/O captures (avoids a libstdc++ segfault on Python 3.14).
 from __future__ import annotations
 
 import os
+import re
 from typing import IO, Any, cast
 
 # Eager import – must happen before pytest capture is active.
 from iotbx import cif as _iotbx_cif  # noqa: F401
+
+# Matches an _atom_site loop that has column headers but no data rows.
+# Such CIFs cause iotbx.cif to fail silently or segfault during parsing.
+_EMPTY_ATOM_SITE_LOOP_RE = re.compile(
+    r"loop_"
+    r"(?:\s+_atom_site_\S+)+"  # one or more _atom_site_* column names
+    r"(?:\s|#[^\n]*)+"  # only whitespace/comments follow (no data)
+    r"(?=_(?!atom_site_)|loop_|\Z)",  # next is a non-atom_site key, new loop, or EOF
+    re.IGNORECASE,
+)
 
 
 def load_cif(path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Any:
@@ -32,10 +43,14 @@ def load_cif(path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Any:
         reader = cast(IO[bytes], path)
         raw = reader.read()
         cif_text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
-        cif_reader = iotbx_cif.reader(input_string=cif_text)
     else:
-        cif_reader = iotbx_cif.reader(file_path=str(path))
+        with open(str(path), errors="replace") as f:
+            cif_text = f.read()
 
+    if _EMPTY_ATOM_SITE_LOOP_RE.search(cif_text):
+        raise ValueError(f"CIF {path!r} has an _atom_site loop with no data rows")
+
+    cif_reader = iotbx_cif.reader(input_string=cif_text)
     model = cif_reader.build_crystal_structures()
     if not model:
         raise ValueError(f"CIF {path!r} did not yield any crystal structures")

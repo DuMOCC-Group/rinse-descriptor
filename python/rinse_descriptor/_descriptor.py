@@ -89,6 +89,11 @@ class RinseParams:
     radial_basis:
         ``"chebyshev"`` , ``"bessel"`` or
         ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
+    use_reported_adps:
+        If *True*, use displacement parameters as reported in the CIF (isotropic
+        or anisotropic).  Default *False*: all atoms are assigned isotropic
+        thermal motion with U_iso = 0.01 Å², which gives a consistent baseline
+        regardless of CIF completeness.
     """
 
     n_max: int = 8
@@ -97,6 +102,7 @@ class RinseParams:
     include_odd_l: bool = False
     sin_theta_over_lambda_max: float = 0.6
     radial_basis: RadialBasisType = "smooth_shells_nl"
+    use_reported_adps: bool = False
     log1p: bool = False
     l2: bool = True
     flatten: bool = True
