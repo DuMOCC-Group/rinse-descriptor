@@ -22,6 +22,9 @@ import sys
 
 if sys.platform == "win32":
     try:
+        from collections.abc import Callable
+        from typing import Any
+
         # libtbx.env_config is safe to import: it does not call unpickle()
         # itself.  The problematic call happens later in libtbx.load_env, which
         # is triggered by iotbx.__init__ → libtbx.version.get_version().
@@ -32,11 +35,9 @@ if sys.platform == "win32":
         def _safe_unpickle(
             build_path: str | None = None,
             env_name: str = "libtbx_env",
-            _orig: object = _orig_unpickle,
-        ) -> object:
+            _orig: Callable[..., Any] = _orig_unpickle,
+        ) -> Any:
             import os.path as _op
-            from collections.abc import Callable
-            from typing import Any
 
             _orig_rp: Callable[..., str] = _op.realpath
 
@@ -48,7 +49,7 @@ if sys.platform == "win32":
 
             _op.realpath = _safe_rp  # type: ignore[assignment]
             try:
-                return _orig(build_path=build_path, env_name=env_name)  # type: ignore[call-arg]
+                return _orig(build_path=build_path, env_name=env_name)
             finally:
                 _op.realpath = _orig_rp  # type: ignore[assignment]
 
