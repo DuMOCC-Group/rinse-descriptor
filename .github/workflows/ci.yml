@@ -39,11 +39,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # cctbx-base's Boost.Python bindings crash on Python 3.13 + Linux;
-        # use 3.12 there until upstream fixes the wheel.
+        # cctbx-base's Boost.Python bindings crash on Linux; skip ubuntu until
+        # upstream fixes the wheel.
         include:
-          - os: ubuntu-latest
-            python-version: "3.12"
           - os: macos-latest
             python-version: "3.13"
           - os: windows-latest

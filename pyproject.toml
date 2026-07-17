@@ -3,7 +3,7 @@ name = "rinse-descriptor"
 version = "2.0.0"
 description = "Reciprocal-space INvariant Spectral Embedding (RINSE) descriptors for crystalline materials"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 license = { text = "MIT" }
 keywords = ["crystallography", "materials science", "machine learning", "descriptors"]
 classifiers = [
