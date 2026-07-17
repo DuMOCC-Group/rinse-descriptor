@@ -11,17 +11,70 @@ Usage:
     python compute_csd_hashes.py                    # Process all structures
     python compute_csd_hashes.py 10 0               # Process chunk 0 of 10
     python compute_csd_hashes.py 10 1               # Process chunk 1 of 10
+    python compute_csd_hashes.py --refcode AABHTZ  # Single refcode
 """
 
 import argparse
 import csv
 import pickle
 import sys
+import time
 from io import StringIO
 from pathlib import Path
 
 from ccdc.io import EntryReader
-from rinse_descriptor import descriptor, descriptor_hash, load_cif
+from rinse_descriptor import (
+    RinseParams,
+    compute_power_spectrum,
+    compute_structure_factors,
+    descriptor_hash,
+    load_cif,
+    power_spectrum_to_vector,
+)
+
+
+def _print_timings(t_acc: dict, n: int) -> None:
+    total = sum(t_acc.values())
+    print(
+        f"  avg timings over {n} structures (ms):  "
+        f"cif_string={t_acc['cif_string'] / n * 1e3:.1f}  "
+        f"load_cif={t_acc['load_cif'] / n * 1e3:.1f}  "
+        f"struct_factors={t_acc['struct_factors'] / n * 1e3:.1f}  "
+        f"power_spectrum={t_acc['power_spectrum'] / n * 1e3:.1f}  "
+        f"hash={t_acc['hash'] / n * 1e3:.1f}  "
+        f"total={total / n * 1e3:.1f}",
+        file=sys.stderr,
+    )
+
+
+def _process_single(refcode: str) -> None:
+    """Compute and print the descriptor hash for one CSD refcode."""
+    reader = EntryReader("CSD")
+    entry = reader.entry(refcode)
+    cif_string = entry.to_string(format="cif")
+    params = RinseParams()
+    t0 = time.perf_counter()
+    xrs = load_cif(StringIO(cif_string))
+    t_load = time.perf_counter()
+    reflections = compute_structure_factors(
+        xrs,
+        sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
+    )
+    t_sf = time.perf_counter()
+    P = compute_power_spectrum(reflections, params=params)
+    desc = power_spectrum_to_vector(P)
+    t_ps = time.perf_counter()
+    hash_str = descriptor_hash(desc)
+    t_hash = time.perf_counter()
+    print(f"{refcode}\t{hash_str}")
+    print(
+        f"  load_cif={(t_load - t0) * 1e3:.1f}ms  "
+        f"struct_factors={(t_sf - t_load) * 1e3:.1f}ms  "
+        f"power_spectrum={(t_ps - t_sf) * 1e3:.1f}ms  "
+        f"hash={(t_hash - t_ps) * 1e3:.1f}ms  "
+        f"total={(t_hash - t0) * 1e3:.1f}ms",
+        file=sys.stderr,
+    )
 
 
 def main():
@@ -44,7 +97,17 @@ def main():
         default=0,
         help="Which chunk to process (0-indexed, default: 0)",
     )
+    parser.add_argument(
+        "--refcode",
+        type=str,
+        default=None,
+        help="Process a single refcode and print its hash, then exit",
+    )
     args = parser.parse_args()
+
+    if args.refcode is not None:
+        _process_single(args.refcode)
+        return
 
     if args.chunk_id >= args.num_chunks:
         print(
@@ -102,6 +165,17 @@ def main():
         errors = 0
         skipped_chunk = 0
 
+        # Per-step timing accumulators (seconds)
+        params = RinseParams()
+        t_acc = {
+            "cif_string": 0.0,
+            "load_cif": 0.0,
+            "struct_factors": 0.0,
+            "power_spectrum": 0.0,
+            "hash": 0.0,
+        }
+        t_count = 0
+
         # Iterate through all structures
         print("Processing structures...", file=sys.stderr)
         for entry_idx, entry in enumerate(reader):
@@ -114,7 +188,7 @@ def main():
                     skipped_chunk += 1
                     continue
 
-            if count % 1000 == 0:
+            if count % 100 == 0:
                 if args.num_chunks > 1:
                     print(
                         f"Checked {count} structures (chunk: {count - skipped_chunk}), "
@@ -126,6 +200,8 @@ def main():
                         f"Checked {count} structures, added {new_count} new ({errors} errors)...",
                         file=sys.stderr,
                     )
+                if t_count > 0:
+                    _print_timings(t_acc, t_count)
 
             # Skip if already processed
             if refcode in processed_refcodes:
@@ -133,29 +209,47 @@ def main():
 
             try:
                 # Get CIF string
+                _t = time.perf_counter()
                 cif_string = entry.to_string(format="cif")
+                t_acc["cif_string"] += time.perf_counter() - _t
 
                 # Create xray.structure from CIF string
+                _t = time.perf_counter()
                 try:
                     xrs = load_cif(StringIO(cif_string))
                 except Exception:
                     continue
+                t_acc["load_cif"] += time.perf_counter() - _t
 
                 n_atoms = xrs.scatterers().size()
-                if n_atoms == 0 or n_atoms > 200:
+                if n_atoms == 0:
                     continue
 
-                # Compute descriptor
-                desc = descriptor(xrs)
+                # Compute structure factors
+                _t = time.perf_counter()
+                reflections = compute_structure_factors(
+                    xrs,
+                    sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
+                )
+                t_acc["struct_factors"] += time.perf_counter() - _t
+
+                # Compute power spectrum
+                _t = time.perf_counter()
+                P = compute_power_spectrum(reflections, params=params)
+                desc = power_spectrum_to_vector(P)
+                t_acc["power_spectrum"] += time.perf_counter() - _t
 
                 # Store descriptor
                 refcodes.append(refcode)
                 descriptors.append(desc)
                 processed_refcodes.add(refcode)
                 new_count += 1
+                t_count += 1
 
-                # Compute hash (single word)
+                # Compute hash
+                _t = time.perf_counter()
                 hash_str = descriptor_hash(desc)
+                t_acc["hash"] += time.perf_counter() - _t
 
                 # Write to CSV and print to stdout
                 writer.writerow([refcode, hash_str])
@@ -171,6 +265,10 @@ def main():
                 errors += 1
                 print(f"Error processing {refcode}: {e}", file=sys.stderr)
                 continue
+
+        if t_count > 0:
+            print("\nAverage timings per structure:", file=sys.stderr)
+            _print_timings(t_acc, t_count)
 
         if args.num_chunks > 1:
             print(
