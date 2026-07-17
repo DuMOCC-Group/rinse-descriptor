@@ -66,7 +66,9 @@ jobs:
         run: uv run mypy python/rinse_descriptor/
 
       - name: pytest
-        run: uv run pytest tests/ -v --tb=short
+        env:
+          PYTHONFAULTHANDLER: "1"
+        run: uv run pytest tests/ -v --tb=short --capture=sys
 
   # --------------------------------------------------------------------------
   # Build sdist + wheel (on push to main)

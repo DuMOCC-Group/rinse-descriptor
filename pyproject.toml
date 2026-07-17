@@ -56,4 +56,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v"
+# --capture=sys uses Python-level capture instead of the default fd-level
+# capture.  cctbx's C extensions segfault when fd capture is active at the
+# time they are first loaded (libstdc++ / fork interaction on Linux).
+addopts = "-v --capture=sys"
