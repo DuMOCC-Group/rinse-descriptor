@@ -29,22 +29,28 @@ if sys.platform == "win32":
 
         _orig_unpickle = _env_config.unpickle
 
-        def _safe_unpickle(build_path=None, env_name="libtbx_env", _orig=_orig_unpickle):
+        def _safe_unpickle(
+            build_path: str | None = None,
+            env_name: str = "libtbx_env",
+            _orig: object = _orig_unpickle,
+        ) -> object:
             import os.path as _op
+            from collections.abc import Callable
+            from typing import Any
 
-            _orig_rp = _op.realpath
+            _orig_rp: Callable[..., str] = _op.realpath
 
-            def _safe_rp(p, **kw):
+            def _safe_rp(p: Any, **kw: Any) -> str:
                 try:
                     return _orig_rp(p, **kw)
                 except OSError:
                     return str(p)
 
-            _op.realpath = _safe_rp
+            _op.realpath = _safe_rp  # type: ignore[assignment]
             try:
-                return _orig(build_path=build_path, env_name=env_name)
+                return _orig(build_path=build_path, env_name=env_name)  # type: ignore[call-arg]
             finally:
-                _op.realpath = _orig_rp
+                _op.realpath = _orig_rp  # type: ignore[assignment]
 
         _env_config.unpickle = _safe_unpickle
         del _orig_unpickle, _safe_unpickle, _env_config
