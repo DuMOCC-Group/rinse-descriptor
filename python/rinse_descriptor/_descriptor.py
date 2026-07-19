@@ -37,12 +37,13 @@ import time
 from dataclasses import dataclass
 from math import pi as _pi
 from math import sqrt as _msqrt
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 from ._radial_basis import RadialBasisType, evaluate_radial_basis
-from ._structure_factors import ReflectionList
+from ._structure_factors import IntensityFalloff, IntensityNormalisation, ReflectionList
 
 # ---------------------------------------------------------------------------
 # Descriptor parameters
@@ -89,11 +90,26 @@ class RinseParams:
     radial_basis:
         ``"chebyshev"`` , ``"bessel"`` or
         ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
+    intensity_normalisation:
+        Resolution-envelope normalisation for the input intensities.
+        ``"empirical"`` (default) estimates the mean intensity envelope in
+        adaptive sin(θ)/λ bins, transforms amplitudes as
+        ``F' = F / sqrt(envelope)``, and weights the descriptor with
+        ``I' = |F'|²``. ``"none"`` leaves calculated intensities unchanged.
+    intensity_normalisation_n_bins:
+        Maximum number of adaptive bins for empirical intensity normalisation.
+    intensity_normalisation_min_bin_size:
+        Minimum target reflections per empirical normalisation bin.
+    intensity_falloff:
+        Amplitude falloff applied after intensity normalisation.
+        ``"debye_waller"`` (default) applies an isotropic Debye-Waller factor;
+        ``"none"`` disables falloff.
+    intensity_falloff_u_iso:
+        Average isotropic displacement parameter in Å² for Debye-Waller falloff.
     use_reported_adps:
-        If *True*, use displacement parameters as reported in the CIF (isotropic
-        or anisotropic).  Default *False*: all atoms are assigned isotropic
-        thermal motion with U_iso = 0.01 Å², which gives a consistent baseline
-        regardless of CIF completeness.
+        If *True* (default), use displacement parameters as reported in the CIF
+        (isotropic or anisotropic). If *False*, all atoms are assigned isotropic
+        thermal motion with U_iso = 0.01 Å².
     """
 
     n_max: int = 8
@@ -102,7 +118,12 @@ class RinseParams:
     include_odd_l: bool = False
     sin_theta_over_lambda_max: float = 0.6
     radial_basis: RadialBasisType = "smooth_shells_nl"
-    use_reported_adps: bool = False
+    intensity_normalisation: IntensityNormalisation | Literal["none", "empirical"] = "empirical"
+    intensity_normalisation_n_bins: int = 24
+    intensity_normalisation_min_bin_size: int = 50
+    intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller"
+    intensity_falloff_u_iso: float = 0.01
+    use_reported_adps: bool = True
     log1p: bool = False
     l2: bool = True
     flatten: bool = True
@@ -115,6 +136,22 @@ class RinseParams:
                 raise ValueError(f"l_min must be even when include_odd_l=False, got {self.l_min}")
         if self.l_min >= self.l_max:
             raise ValueError(f"l_min ({self.l_min}) must be less than l_max ({self.l_max})")
+        self.intensity_normalisation = IntensityNormalisation(self.intensity_normalisation)
+        if self.intensity_normalisation_n_bins < 1:
+            raise ValueError(
+                "intensity_normalisation_n_bins must be >= 1, "
+                f"got {self.intensity_normalisation_n_bins}"
+            )
+        if self.intensity_normalisation_min_bin_size < 1:
+            raise ValueError(
+                "intensity_normalisation_min_bin_size must be >= 1, "
+                f"got {self.intensity_normalisation_min_bin_size}"
+            )
+        self.intensity_falloff = IntensityFalloff(self.intensity_falloff)
+        if self.intensity_falloff_u_iso < 0.0:
+            raise ValueError(
+                f"intensity_falloff_u_iso must be >= 0, got {self.intensity_falloff_u_iso}"
+            )
 
     @property
     def q_max(self) -> float:
@@ -327,7 +364,7 @@ def compute_power_spectrum(
 
     q = reflections.q_magnitudes  # (M,)
     q_vecs = reflections.q_vectors  # (M, 3)
-    intensities = reflections.intensities  # (M,)
+    intensities = reflections.intensities  # I = |F|², shape (M,)
 
     M = len(q)
     if M == 0:

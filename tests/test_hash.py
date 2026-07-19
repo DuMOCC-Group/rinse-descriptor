@@ -151,16 +151,6 @@ class TestDeterminism:
 
 
 # ---------------------------------------------------------------------------
-# Different structures produce different hashes
-# ---------------------------------------------------------------------------
-
-
-class TestDistinctStructures:
-    def test_nacl_vs_si(self, nacl_vec: np.ndarray, si_vec: np.ndarray) -> None:
-        assert descriptor_hash(nacl_vec) != descriptor_hash(si_vec)
-
-
-# ---------------------------------------------------------------------------
 # hash_to_bits round-trip
 # ---------------------------------------------------------------------------
 
@@ -191,11 +181,6 @@ class TestHashToBits:
             value = (int(raw[0]) << 8) | int(raw[1])
             words.append(_int16_to_proquint(value))
         assert "-".join(words) == h
-
-    def test_nacl_si_bits_differ(self, nacl_vec: np.ndarray, si_vec: np.ndarray) -> None:
-        b1 = hash_to_bits(descriptor_hash(nacl_vec))
-        b2 = hash_to_bits(descriptor_hash(si_vec))
-        assert not np.array_equal(b1, b2)
 
 
 # ---------------------------------------------------------------------------

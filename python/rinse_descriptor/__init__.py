@@ -20,26 +20,39 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Sequence
-from importlib import import_module
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
+
+import numpy as np
+from numpy.typing import NDArray
 
 from ._cctbx_import_patch import patch_cctbx_imports
-from ._crystal import load_cif
-
-if TYPE_CHECKING:
-    import numpy as np
-    from numpy.typing import NDArray
-
-    from ._descriptor import RinseParams
-    from ._structure_factors import FormFactorType, StructureFactorType
 
 patch_cctbx_imports()
+
+from ._crystal import load_cif  # noqa: E402
+from ._descriptor import (  # noqa: E402
+    RinseParams,
+    compute_power_spectrum,
+    normalise_power_spectrum,
+    power_spectrum_to_vector,
+)
+from ._hash import DEFAULT_HASH_WORDS, descriptor_hash, hash_to_bits  # noqa: E402
+from ._structure_factors import (  # noqa: E402
+    FormFactorType,
+    IntensityFalloff,
+    IntensityNormalisation,
+    ReflectionList,
+    StructureFactorType,
+    compute_structure_factors,
+)
 
 __version__ = "0.1.0"
 __all__ = [
     "load_cif",
     "RinseParams",
     "FormFactorType",
+    "IntensityFalloff",
+    "IntensityNormalisation",
     "StructureFactorType",
     "ReflectionList",
     "compute_structure_factors",
@@ -52,38 +65,13 @@ __all__ = [
     "DEFAULT_HASH_WORDS",
 ]
 
-_LAZY_EXPORTS = {
-    "DEFAULT_HASH_WORDS": ("._hash", "DEFAULT_HASH_WORDS"),
-    "FormFactorType": ("._structure_factors", "FormFactorType"),
-    "ReflectionList": ("._structure_factors", "ReflectionList"),
-    "RinseParams": ("._descriptor", "RinseParams"),
-    "StructureFactorType": ("._structure_factors", "StructureFactorType"),
-    "compute_power_spectrum": ("._descriptor", "compute_power_spectrum"),
-    "compute_structure_factors": ("._structure_factors", "compute_structure_factors"),
-    "descriptor_hash": ("._hash", "descriptor_hash"),
-    "hash_to_bits": ("._hash", "hash_to_bits"),
-    "normalise_power_spectrum": ("._descriptor", "normalise_power_spectrum"),
-    "power_spectrum_to_vector": ("._descriptor", "power_spectrum_to_vector"),
-}
-
-
-def __getattr__(name: str) -> Any:
-    if name not in _LAZY_EXPORTS:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-    module_name, attr_name = _LAZY_EXPORTS[name]
-    value = getattr(import_module(module_name, __name__), attr_name)
-    globals()[name] = value
-    return value
-
 
 def descriptor(
     atoms: object,
     *,
     params: RinseParams | None = None,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
-    structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
-    use_reported_adps: bool = False,
+    use_reported_adps: bool | None = None,
     debug: bool = False,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a single structure.
@@ -100,11 +88,16 @@ def descriptor(
         *True*) or the 2-D ``(n_max, n_l_levels)`` matrix.
     form_factor_type:
         ``"xray"`` | ``"electron"`` | ``"neutron"``.
-    structure_factor_type:
-        ``"F2"`` (default) | ``"F"``.
     use_reported_adps:
-        If *True*, use displacement parameters from the CIF.  Default *False*:
-        all atoms are reset to isotropic U_iso = 0.01 Å².
+        If *True*, use displacement parameters from the CIF. If *False*, all
+        atoms are reset to isotropic U_iso = 0.01 Å². Uses
+        ``params.use_reported_adps`` when *None*.
+
+    Notes
+    -----
+    The descriptor is always weighted by intensities ``I = |F|²``.  Set
+    ``params.intensity_normalisation`` to remove the resolution-dependent
+    intensity envelope before the power spectrum is accumulated.
 
     Returns
     -------
@@ -112,9 +105,6 @@ def descriptor(
     ``(n_max, n_l_levels)`` [flatten=False].
     """
     import pathlib
-
-    from ._descriptor import RinseParams, compute_power_spectrum, power_spectrum_to_vector
-    from ._structure_factors import compute_structure_factors
 
     t0 = time.perf_counter()
 
@@ -136,13 +126,20 @@ def descriptor(
 
     if params is None:
         params = RinseParams()
+    if use_reported_adps is None:
+        use_reported_adps = params.use_reported_adps
 
     _t = time.perf_counter()
     reflections = compute_structure_factors(
         xrs,
         sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
         form_factor_type=form_factor_type,
-        structure_factor_type=structure_factor_type,
+        structure_factor_type="F2",
+        intensity_normalisation=params.intensity_normalisation,
+        intensity_normalisation_n_bins=params.intensity_normalisation_n_bins,
+        intensity_normalisation_min_bin_size=params.intensity_normalisation_min_bin_size,
+        intensity_falloff=params.intensity_falloff,
+        intensity_falloff_u_iso=params.intensity_falloff_u_iso,
         use_reported_adps=use_reported_adps,
         debug=debug,
     )
@@ -174,8 +171,7 @@ def descriptor_many(
     *,
     params: RinseParams | None = None,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
-    structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
-    use_reported_adps: bool = False,
+    use_reported_adps: bool | None = None,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a list of structures.
 
@@ -185,25 +181,23 @@ def descriptor_many(
         Iterable of :class:`cctbx.xray.structure` objects or CIF paths.
     params:
         Shared descriptor hyper-parameters.
-    form_factor_type, structure_factor_type:
+    form_factor_type:
         Passed to :func:`descriptor`.
     use_reported_adps:
-        If *True*, use displacement parameters from the CIF.  Default *False*:
-        all atoms are reset to isotropic U_iso = 0.01 Å².
+        If *True*, use displacement parameters from the CIF. If *False*, all
+        atoms are reset to isotropic U_iso = 0.01 Å². Uses
+        ``params.use_reported_adps`` when *None*.
 
     Returns
     -------
     ndarray of shape (N, descriptor_length) [default, flatten=True] or
     (N, n_max, n_l_levels) [flatten=False].
     """
-    import numpy as np
-
     results = [
         descriptor(
             s,
             params=params,
             form_factor_type=form_factor_type,
-            structure_factor_type=structure_factor_type,
             use_reported_adps=use_reported_adps,
         )
         for s in structures

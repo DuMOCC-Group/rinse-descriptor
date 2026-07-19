@@ -139,6 +139,56 @@ class TestNonNegativity:
 
 
 class TestStructureFactors:
+    def test_default_intensity_normalisation_is_empirical(self, ylid: object) -> None:
+        assert RinseParams().intensity_normalisation == "empirical"
+        assert RinseParams().intensity_falloff == "debye_waller"
+        assert RinseParams().intensity_falloff_u_iso == 0.01
+        assert RinseParams().use_reported_adps is True
+
+        refls_default = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+        )
+        refls_explicit = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            intensity_normalisation="empirical",
+            intensity_falloff="debye_waller",
+            intensity_falloff_u_iso=0.01,
+        )
+        np.testing.assert_allclose(refls_default.intensities, refls_explicit.intensities)
+
+    def test_debye_waller_intensity_falloff_suppresses_high_resolution(self, ylid: object) -> None:
+        refls_no_falloff = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            intensity_normalisation="empirical",
+            intensity_falloff="none",
+        )
+        refls_debye_waller = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            intensity_normalisation="empirical",
+            intensity_falloff="debye_waller",
+            intensity_falloff_u_iso=0.01,
+        )
+
+        s = 0.5 * refls_debye_waller.q_magnitudes
+        high_s = s > np.quantile(s, 0.9)
+        np.testing.assert_allclose(
+            refls_debye_waller.intensities / refls_no_falloff.intensities,
+            np.exp(-16.0 * np.pi**2 * 0.01 * s * s),
+            rtol=1e-12,
+        )
+        assert np.mean(refls_debye_waller.intensities[high_s]) < np.mean(
+            refls_no_falloff.intensities[high_s]
+        )
+        assert np.all(refls_debye_waller.intensities <= refls_no_falloff.intensities + 1e-12)
+
+    def test_invalid_debye_waller_u_iso_rejected(self) -> None:
+        with pytest.raises(ValueError, match="intensity_falloff_u_iso"):
+            RinseParams(intensity_falloff_u_iso=-0.01)
+
     def test_reflection_count_positive(self, nacl: object) -> None:
         refls = compute_structure_factors(nacl, sin_theta_over_lambda_max=1.0)
         assert len(refls) > 0
@@ -169,6 +219,51 @@ class TestStructureFactors:
             structure_factor_type=sf_type,
         )
         assert refls.intensities.shape == (len(refls),)
+
+    def test_empirical_intensity_normalisation_is_finite(self, ylid: object) -> None:
+        refls = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            intensity_normalisation="empirical",
+            intensity_falloff="none",
+        )
+        assert np.all(np.isfinite(refls.intensities))
+        assert np.all(refls.intensities >= 0.0)
+
+    def test_empirical_intensity_normalisation_flattens_dense_fixture(self, ylid: object) -> None:
+        refls = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            intensity_normalisation="empirical",
+            intensity_falloff="none",
+        )
+        s = 0.5 * refls.q_magnitudes
+        order = np.argsort(s)
+        bin_means = [
+            float(np.mean(refls.intensities[idx]))
+            for idx in np.array_split(order, 12)
+            if len(idx) > 0
+        ]
+        np.testing.assert_allclose(bin_means, np.ones(len(bin_means)), rtol=0.35, atol=0.35)
+
+    def test_empirical_f_output_squares_to_intensity_output(self, ylid: object) -> None:
+        refls_f2 = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            structure_factor_type="F2",
+            intensity_normalisation="empirical",
+            intensity_falloff="debye_waller",
+        )
+        refls_f = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            structure_factor_type="F",
+            intensity_normalisation="empirical",
+            intensity_falloff="debye_waller",
+        )
+
+        np.testing.assert_array_equal(refls_f.hkl, refls_f2.hkl)
+        np.testing.assert_allclose(refls_f.intensities**2, refls_f2.intensities, rtol=1e-12)
 
 
 # ---------------------------------------------------------------------------
@@ -212,11 +307,15 @@ loop_
             xrs1,
             sin_theta_over_lambda_max=0.5,
             form_factor_type="xray",
+            intensity_normalisation="none",
+            use_reported_adps=False,
         )
         r05 = compute_structure_factors(
             xrs05,
             sin_theta_over_lambda_max=0.5,
             form_factor_type="xray",
+            intensity_normalisation="none",
+            use_reported_adps=False,
         )
 
         # For a single atom at the origin, occupancy scales amplitudes linearly,
@@ -270,6 +369,30 @@ loop_
             form_factor_type="xray",
         )
         assert len(refls) > 0
+
+        refls_explicit = compute_structure_factors(
+            xrs,
+            sin_theta_over_lambda_max=0.5,
+            form_factor_type="xray",
+            use_reported_adps=True,
+        )
+        np.testing.assert_allclose(refls.intensities, refls_explicit.intensities)
+
+        refls_fixed_u = compute_structure_factors(
+            xrs,
+            sin_theta_over_lambda_max=0.5,
+            form_factor_type="xray",
+            intensity_normalisation="none",
+            use_reported_adps=False,
+        )
+        refls_reported_u = compute_structure_factors(
+            xrs,
+            sin_theta_over_lambda_max=0.5,
+            form_factor_type="xray",
+            intensity_normalisation="none",
+            use_reported_adps=True,
+        )
+        assert not np.allclose(refls_fixed_u.intensities, refls_reported_u.intensities)
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +470,6 @@ class TestAdditionalInvariances:
             flatten=False,
         )
         # NaCl and Si are chemically distinct: their xray descriptors must differ.
-        x_nacl = descriptor(nacl, params=params, structure_factor_type="F2")
-        x_si = descriptor(silicon, params=params, structure_factor_type="F2")
+        x_nacl = descriptor(nacl, params=params)
+        x_si = descriptor(silicon, params=params)
         assert not np.allclose(x_nacl, x_si, rtol=1e-4, atol=1e-6)

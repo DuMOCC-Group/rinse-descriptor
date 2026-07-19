@@ -7,15 +7,19 @@ and angular basis (analogous to SOAP, but working entirely in reciprocal space).
 ## Descriptor formulation
 
 For a crystal, all reflections $\mathbf{G}_{\mathrm{hkl}}$ within a resolution cutoff
-(default $\sin{\theta}/\lambda \leq 0.6 Å^{-1}$ , i.e. $\mathbf{G} \leq 1.2 Å^{-1}$) are enumerated.
+(default $\sin{\theta}/\lambda \leq 0.6 Å^{-1}$, i.e. $|\mathbf{G}| \leq 1.2 Å^{-1}$) are enumerated.
 Each reflection is assigned an intensity $\mathrm{I}(\mathbf{G}) = \lvert\mathrm{F}(\mathbf{G})\rvert^{2}$ from the
-structure factor calculated via Gemmi (direct summation, IT92 X-ray form
-factors by default), or a crude pure Python implementation.
+structure factor calculated via cctbx direct summation with Waasmaier-Kirfel
+X-ray form factors by default. The descriptor is always weighted by intensities,
+not amplitudes. Isotropic and anisotropic displacement parameters are read from
+the CIF by default; empirical reciprocal-space intensity normalisation then
+removes the mean resolution envelope, followed by an isotropic Debye-Waller
+falloff that softly damps high-resolution reflections.
 
 The expansion coefficients are:
 
 $$
-A_{nlm} = Σ_\mathbf{G}  I(\mathbf{G}) · R_n(\mathbf{G}) · Y_l^m(\hat{\mathbf{G}})
+A_{nlm} = Σ_\mathbf{G}  I(\mathbf{G}) · R_n(|\mathbf{G}|) · Y_l^m(\hat{\mathbf{G}})
 $$
 
 and the rotationally invariant power spectrum is:
@@ -25,12 +29,13 @@ p_{nl} = Σ_m \lvert A_{nlm}\rvert^{2}
 $$
 
 Because the intensity field is centrosymmetric if anomalous dispersion is not considered, only even *l*
-contributes. Default parameters give a **8 × 16 = 128-element** descriptor:
+contributes. By default, RINSE also drops the monopole (*l* = 0) and quadrupole
+(*l* = 2) terms. Default parameters give a **8 × 16 = 128-element** descriptor:
 
 | Axis | Values | Count |
 |------|--------|-------|
 | Radial (*n*) | 0, 1, …, 7 | 8 |
-| Angular (*l*) | 0, 2, 4, …, 30 (even only) | 16 |
+| Angular (*l*) | 4, 6, 8, …, 34 (even only) | 16 |
 
 ## Installation
 
@@ -61,34 +66,34 @@ uv add rinse-descriptor
 
 ## Quick start
 
-### From an ASE Atoms object
-
-```python
-from ase.build import bulk
-from rinse_descriptor import descriptor, descriptor_many, RinseParams
-
-# Single structure → (8, 16) matrix
-atoms = bulk("NaCl", "rocksalt", a=5.64)
-x = descriptor(atoms)
-print(x.shape)  # (8, 16)
-
-# Flatten to 1-D feature vector
-x_vec = descriptor(atoms, flatten=True)
-print(x_vec.shape)  # (128,)
-
-# Batch of structures → (N, 8, 16)
-structures = [bulk("Si", "diamond", a=5.43), bulk("Cu", "fcc", a=3.62)]
-X = descriptor_many(structures)
-print(X.shape)  # (2, 8, 16)
-```
-
 ### From a CIF file
 
 ```python
-from rinse_descriptor import descriptor
+from rinse_descriptor import RinseParams, descriptor, descriptor_many
 
+# Single structure → 1-D feature vector
 x = descriptor("mystructure.cif")
-print(x.shape)  # (8, 16)
+print(x.shape)  # (128,)
+
+# Return the 2-D power-spectrum matrix instead
+params = RinseParams(flatten=False)
+x_mat = descriptor("mystructure.cif", params=params)
+print(x_mat.shape)  # (8, 16)
+
+# Batch of structures → (N, 128)
+structures = ["structure_1.cif", "structure_2.cif"]
+X = descriptor_many(structures)
+print(X.shape)  # (2, 128)
+```
+
+### From a loaded cctbx structure
+
+```python
+from rinse_descriptor import descriptor, load_cif
+
+xrs = load_cif("mystructure.cif")
+x = descriptor(xrs)
+print(x.shape)  # (128,)
 ```
 
 ### Custom parameters
@@ -98,28 +103,36 @@ from rinse_descriptor import RinseParams, descriptor
 
 params = RinseParams(
     n_max=8,                       # radial basis order (n = 0 … 7)
-    l_max=16,                       # angular levels (gives l = 0,2,...,30)
+    l_max=36,                       # angular levels (gives l = 4,6,...,34 by default)
     sin_theta_over_lambda_max=0.6,  # resolution cutoff in Å⁻¹
     radial_basis="chebyshev",       # or "bessel" / "smooth_shells_cw" / "smooth_shells_nl"
+    intensity_normalisation="none",  # optional: disable the default empirical envelope removal
+    intensity_falloff="none",        # optional: disable the default Debye-Waller falloff
 )
-x = descriptor(atoms, params=params)
+x = descriptor("mystructure.cif", params=params)
 ```
 
-### Form factors and structure factor type
+### Form factors, intensity normalisation, and falloff
 
 ```python
 from rinse_descriptor import descriptor
 
-# Electron scattering factors, intensities
-x = descriptor(atoms, form_factor_type="electron", structure_factor_type="F2")
+# Electron scattering factors; descriptor weights are still intensities I = |F|²
+x = descriptor("mystructure.cif", form_factor_type="electron")
 
-# Neutron scattering lengths, amplitudes
-x = descriptor(atoms, form_factor_type="neutron", structure_factor_type="F")
+# Empirical envelope removal and Debye-Waller falloff are on by default.
+# Set intensity_normalisation="none" and/or intensity_falloff="none" to opt out.
+x_norm = descriptor("mystructure.cif")
 ```
 
-Available `form_factor_type` values: `"xray"` (default), `"electron"`, `"neutron"`, `"unity"`.
+Available `form_factor_type` values: `"xray"` (default), `"electron"`, `"neutron"`.
 
-Available `structure_factor_type` values: `"F2"` (default), `"F"`.
+Available `intensity_normalisation` values: `"empirical"` (default), `"none"`.
+
+Available `intensity_falloff` values: `"debye_waller"` (default), `"none"`.
+For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic
+displacement parameter used in the amplitude factor
+`exp(-8 * pi**2 * U_iso * (sin(theta)/lambda)**2)`; the default is `0.01` Å².
 
 ## Development
 
@@ -157,8 +170,8 @@ uv run pre-commit run --all-files
 rinse-descriptor/
 ├── python/rinse_descriptor/  # Python package
 │   ├── __init__.py        # Public API: descriptor(), descriptor_many()
-│   ├── _crystal.py        # Crystal dataclass (ASE/Gemmi-independent)
-│   ├── _structure_factors.py  # Gemmi structure factor calculation
+│   ├── _crystal.py        # CIF loading into cctbx xray.structure objects
+│   ├── _structure_factors.py  # cctbx structure factor calculation
 │   ├── _radial_basis.py   # Chebyshev / Bessel / smooth-shell radial bases
 │   └── _descriptor.py     # Power spectrum computation
 ├── tests/                 # pytest test suite
@@ -175,8 +188,8 @@ The package is designed to support a future `rinse_descriptor.diffraction` submo
 - Unindexed powder diffraction patterns (2θ or *d*-spacing profiles)
 - Reciprocal-space descriptors beyond the power spectrum (e.g. bispectrum)
 
-The `Crystal`, `ReflectionList`, and `RinseParams` types are designed to be
-shared between the core descriptor and the diffraction submodule.
+The `ReflectionList` and `RinseParams` types are designed to be shared between
+the core descriptor and the diffraction submodule.
 
 ## License
 

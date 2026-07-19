@@ -99,6 +99,41 @@ def _make_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Disable L2 normalisation.",
     )
+    norm.add_argument(
+        "--intensity-normalisation",
+        default=defaults.intensity_normalisation,
+        choices=["none", "empirical"],
+        help=(
+            "Normalise the resolution-dependent intensity envelope before descriptor accumulation."
+        ),
+    )
+    norm.add_argument(
+        "--intensity-normalisation-bins",
+        type=int,
+        default=defaults.intensity_normalisation_n_bins,
+        metavar="N",
+        help="Maximum adaptive bins for empirical intensity normalisation.",
+    )
+    norm.add_argument(
+        "--intensity-normalisation-min-bin-size",
+        type=int,
+        default=defaults.intensity_normalisation_min_bin_size,
+        metavar="N",
+        help="Minimum target reflections per empirical intensity-normalisation bin.",
+    )
+    norm.add_argument(
+        "--intensity-falloff",
+        default=defaults.intensity_falloff,
+        choices=["none", "debye_waller"],
+        help="Amplitude falloff applied after intensity normalisation.",
+    )
+    norm.add_argument(
+        "--intensity-falloff-u-iso",
+        type=float,
+        default=defaults.intensity_falloff_u_iso,
+        metavar="U",
+        help="Average U_iso in Å² for --intensity-falloff=debye_waller.",
+    )
     p.set_defaults(log1p=defaults.log1p, l2=defaults.l2)
 
     # Structure factors
@@ -109,13 +144,6 @@ def _make_parser() -> argparse.ArgumentParser:
         choices=["xray", "electron", "neutron"],
         dest="form_factor_type",
         help="Atomic form factor type.",
-    )
-    sf.add_argument(
-        "--sf-type",
-        default="F2",
-        choices=["F2", "F"],
-        dest="structure_factor_type",
-        help="Structure factor type (intensity F² or amplitude |F|).",
     )
 
     # Hash
@@ -173,7 +201,6 @@ def _compute_one(
     cif_path: str,
     params: object,
     form_factor_type: str,
-    structure_factor_type: str,
     want_hash: bool,
     hash_words: int,
 ) -> tuple[object, str | None]:
@@ -181,7 +208,7 @@ def _compute_one(
     from typing import Literal, cast
 
     from . import RinseParams, descriptor, descriptor_hash
-    from ._structure_factors import FormFactorType, StructureFactorType
+    from ._structure_factors import FormFactorType
 
     assert isinstance(params, RinseParams)
     vec = descriptor(
@@ -190,10 +217,6 @@ def _compute_one(
         form_factor_type=cast(
             "Literal['xray','electron','neutron'] | FormFactorType",
             form_factor_type,
-        ),
-        structure_factor_type=cast(
-            "Literal['F','F2'] | StructureFactorType",
-            structure_factor_type,
         ),
     )
     h = descriptor_hash(vec.ravel(), n_words=hash_words) if want_hash else None
@@ -214,6 +237,11 @@ def main(argv: list[str] | None = None) -> int:
             include_odd_l=args.include_odd_l,
             sin_theta_over_lambda_max=args.sin_theta_over_lambda_max,
             radial_basis=args.radial_basis,
+            intensity_normalisation=args.intensity_normalisation,
+            intensity_normalisation_n_bins=args.intensity_normalisation_bins,
+            intensity_normalisation_min_bin_size=args.intensity_normalisation_min_bin_size,
+            intensity_falloff=args.intensity_falloff,
+            intensity_falloff_u_iso=args.intensity_falloff_u_iso,
             log1p=args.log1p,
             l2=args.l2,
             flatten=args.flatten,
@@ -235,7 +263,6 @@ def main(argv: list[str] | None = None) -> int:
                 str(path),
                 params,
                 form_factor_type=args.form_factor_type,
-                structure_factor_type=args.structure_factor_type,
                 want_hash=args.hash,
                 hash_words=args.hash_words,
             )

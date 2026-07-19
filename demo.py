@@ -46,6 +46,12 @@ def _():
     from rinse_descriptor._descriptor import compute_power_spectrum, power_spectrum_to_vector
     from rinse_descriptor._structure_factors import compute_structure_factors
 
+    def safe_descriptor_hash(vec, *, n_words):
+        try:
+            return descriptor_hash(vec, n_words=n_words)
+        except ValueError:
+            return "PCA unavailable"
+
     return (
         DEFAULT_HASH_WORDS,
         RinseParams,
@@ -58,6 +64,7 @@ def _():
         np,
         plt,
         power_spectrum_to_vector,
+        safe_descriptor_hash,
     )
 
 
@@ -72,6 +79,11 @@ def _(mo):
     crystal structure. The descriptor is by default a **8 × 16 matrix** (128 elements)
     indexed by radial order *n* and even angular
     level *ℓ* ∈ {0, 2, 4, …, 62}.
+
+    Descriptor weights are intensities, I = |F|². The default empirical
+    intensity normalisation removes the mean resolution-dependent intensity
+    envelope, then an isotropic Debye-Waller falloff softly damps high-resolution
+    reflections before the power spectrum is accumulated.
 
     Upload a CIF file, then adjust
     the parameters below.
@@ -109,6 +121,14 @@ def _(mo):
     factors are calculated. This is generally the slowest step.
     0.6 is atomic resolution, and this should be more than enough.
     It may be justfied to reduce this.
+
+    Intensity normalisation estimates the mean |F|² envelope in adaptive
+    sin_theta_over_lambda bins. The normalisation is applied as F' =
+    F / sqrt(envelope), then the descriptor is weighted with I' = |F'|².
+
+    Intensity falloff applies an amplitude window after normalisation. The
+    default Debye-Waller falloff multiplies amplitudes by exp(-8π² U_iso s²),
+    where s = sin(theta)/lambda and U_iso defaults to 0.01 Å².
 
     log1p compression reduces the dynamic range of the descriptor.
     This is generally required when monopoles are included.
@@ -164,10 +184,23 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         value="xray",
         label="Form factor type",
     )
-    norm_dd = mo.ui.dropdown(
-        options=["F2", "F"],
-        value="F2",
-        label="Structure factor type",
+    intensity_norm_dd = mo.ui.dropdown(
+        options=["none", "empirical"],
+        value=_defaults["intensity_normalisation"],
+        label="Intensity normalisation",
+    )
+    intensity_falloff_dd = mo.ui.dropdown(
+        options=["none", "debye_waller"],
+        value=_defaults["intensity_falloff"],
+        label="Intensity falloff",
+    )
+    intensity_falloff_u_iso_slider = mo.ui.slider(
+        start=0.0,
+        stop=0.05,
+        step=0.001,
+        value=_defaults["intensity_falloff_u_iso"],
+        label="Falloff U_iso  (Å²)",
+        show_value=True,
     )
     log1p_compression_cb = mo.ui.checkbox(value=_defaults["log1p"], label="log1p compression")
     l2_normalisation_cb = mo.ui.checkbox(value=_defaults["l2"], label="l2 normalisation")
@@ -187,7 +220,9 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
                 [
                     basis_dd,
                     ff_dd,
-                    norm_dd,
+                    intensity_norm_dd,
+                    intensity_falloff_dd,
+                    intensity_falloff_u_iso_slider,
                     log1p_compression_cb,
                     l2_normalisation_cb,
                     include_odd_l_cb,
@@ -203,13 +238,15 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         basis_dd,
         ff_dd,
         include_odd_l_cb,
+        intensity_falloff_dd,
+        intensity_falloff_u_iso_slider,
+        intensity_norm_dd,
         l2_normalisation_cb,
         l_max_slider,
         l_min_slider,
         log1p_compression_cb,
         n_max_slider,
         n_words_slider,
-        norm_dd,
         stol_slider,
     )
 
@@ -241,13 +278,15 @@ def _(
     compute_structure_factors,
     ff_dd,
     include_odd_l_cb,
+    intensity_falloff_dd,
+    intensity_falloff_u_iso_slider,
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
     load_cif,
     log1p_compression_cb,
     n_max_slider,
-    norm_dd,
+    intensity_norm_dd,
     power_spectrum_to_vector,
     stol_slider,
 ):
@@ -286,6 +325,9 @@ def _(
                 include_odd_l=include_odd_l_cb.value,
                 sin_theta_over_lambda_max=stol_slider.value,
                 radial_basis=basis_dd.value,
+                intensity_normalisation=intensity_norm_dd.value,
+                intensity_falloff=intensity_falloff_dd.value,
+                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 log1p=log1p_compression_cb.value,
                 l2=l2_normalisation_cb.value,
                 flatten=False,
@@ -294,7 +336,10 @@ def _(
                 _crystal,
                 sin_theta_over_lambda_max=stol_slider.value,
                 form_factor_type=ff_dd.value,
-                structure_factor_type=norm_dd.value,
+                structure_factor_type="F2",
+                intensity_normalisation=intensity_norm_dd.value,
+                intensity_falloff=intensity_falloff_dd.value,
+                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 debug=True,
             )
             _P = compute_power_spectrum(
@@ -317,7 +362,7 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(P, compute_error, mo, plt):
+def _(P, compute_error, mo, params, plt):
     if compute_error or P is None:
         mo.stop(True)
 
@@ -327,20 +372,19 @@ def _(P, compute_error, mo, plt):
     # Panel 1 – heatmap
     _ax = _axes[0]
     _im = _ax.imshow(P.T, origin="lower", aspect="auto", cmap="inferno", interpolation="nearest")
-    _ax.set_ylabel("Angular level k  (ℓ = 2k)", fontsize=9)
+    _ax.set_ylabel("Angular level ℓ", fontsize=9)
     _ax.set_xlabel("Radial order n", fontsize=9)
     _ax.set_title("Descriptor matrix  p(n, ℓ)", fontsize=10)
-    _n_l = P.shape[1]
-    _kticks = list(range(0, _n_l, max(1, _n_l // 8)))
-    _ax.set_yticks(_kticks)
-    _ax.set_yticklabels([str(2 * k) for k in _kticks], fontsize=7)
+    _l_vals = params.l_values
+    _lticks = list(range(0, len(_l_vals), max(1, len(_l_vals) // 8)))
+    _ax.set_yticks(_lticks)
+    _ax.set_yticklabels([str(_l_vals[i]) for i in _lticks], fontsize=7)
     plt.colorbar(_im, ax=_ax, shrink=0.85)
 
     # Panel 2 – radial & angular profiles
     _ax2 = _axes[1]
     _radial = P.sum(axis=1)
     _angular = P.sum(axis=0)
-    _l_vals = [2 * k for k in range(P.shape[1])]
     _ax2b = _ax2.twinx()
     _ax2.bar(range(P.shape[0]), _radial, color="#4477AA", alpha=0.7, label="Radial Σ_ℓ p(n,ℓ)")
     _ax2b.plot(_l_vals, _angular, "o-", color="#EE6677", ms=4, lw=1.5, label="Angular Σ_n p(n,ℓ)")
@@ -401,11 +445,11 @@ def _(P, compute_error, mo, np):
 
 
 @app.cell(hide_code=True)
-def _(P, compute_error, descriptor_hash, mo, n_words_slider, vec):
+def _(P, compute_error, mo, n_words_slider, safe_descriptor_hash, vec):
     if compute_error or P is None:
         mo.stop(True)
 
-    _hash = descriptor_hash(vec, n_words=n_words_slider.value)
+    _hash = safe_descriptor_hash(vec, n_words=n_words_slider.value)
     _n_bits = n_words_slider.value * 16
     mo.md(f"""
     ### Descriptor hash
@@ -501,16 +545,18 @@ def _(
     crystal,
     dataclasses,
     descriptor,
-    descriptor_hash,
     ff_dd,
+    intensity_falloff_dd,
+    intensity_falloff_u_iso_slider,
+    intensity_norm_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
     n_words_slider,
-    norm_dd,
     np,
     params,
     plt,
+    safe_descriptor_hash,
 ):
     if compute_error or P is None:
         mo.stop(True)
@@ -520,7 +566,13 @@ def _(
 
     _scales = np.round(np.arange(0.90, 1.1001, 0.01), 2)
     _params = dataclasses.replace(
-        params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
+        params,
+        intensity_falloff=intensity_falloff_dd.value,
+        intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
+        intensity_normalisation=intensity_norm_dd.value,
+        log1p=log1p_compression_cb.value,
+        l2=l2_normalisation_cb.value,
+        flatten=False,
     )
 
     _scaled_descriptors = []
@@ -536,7 +588,6 @@ def _(
             descriptor(
                 _scaled,
                 params=_params,
-                structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
             ).T.ravel()
         )
@@ -553,7 +604,7 @@ def _(
     ]
 
     _hashes = [
-        descriptor_hash(_descriptor, n_words=n_words_slider.value)
+        safe_descriptor_hash(_descriptor, n_words=n_words_slider.value)
         for _descriptor in _descriptor_matrix
     ]
 
@@ -625,16 +676,18 @@ def _(
     crystal,
     dataclasses,
     descriptor,
-    descriptor_hash,
     ff_dd,
+    intensity_falloff_dd,
+    intensity_falloff_u_iso_slider,
+    intensity_norm_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
     n_words_slider,
-    norm_dd,
     np,
     params,
     plt,
+    safe_descriptor_hash,
 ):
     if compute_error or P is None:
         mo.stop(True)
@@ -646,7 +699,13 @@ def _(
 
     _scales = np.round(np.arange(-0.1, 0.1001, 0.01), 2)
     _params = dataclasses.replace(
-        params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
+        params,
+        intensity_falloff=intensity_falloff_dd.value,
+        intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
+        intensity_normalisation=intensity_norm_dd.value,
+        log1p=log1p_compression_cb.value,
+        l2=l2_normalisation_cb.value,
+        flatten=False,
     )
 
     # Expand to P1 once; fractional coordinates are invariant under cell shearing.
@@ -675,7 +734,6 @@ def _(
             descriptor(
                 _sheared,
                 params=_params,
-                structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
             ).T.ravel()
         )
@@ -692,7 +750,7 @@ def _(
     ]
 
     _hashes = [
-        descriptor_hash(_descriptor, n_words=n_words_slider.value)
+        safe_descriptor_hash(_descriptor, n_words=n_words_slider.value)
         for _descriptor in _descriptor_matrix
     ]
 
@@ -763,16 +821,18 @@ def _(
     crystal,
     dataclasses,
     descriptor,
-    descriptor_hash,
     ff_dd,
+    intensity_falloff_dd,
+    intensity_falloff_u_iso_slider,
+    intensity_norm_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
     n_words_slider,
-    norm_dd,
     np,
     params,
     plt,
+    safe_descriptor_hash,
 ):
     if compute_error or P is None:
         mo.stop(True)
@@ -780,7 +840,13 @@ def _(
 
     _scales = np.round(np.arange(0, 1.001, 0.1), 2)
     _params = dataclasses.replace(
-        params, log1p=log1p_compression_cb.value, l2=l2_normalisation_cb.value, flatten=False
+        params,
+        intensity_falloff=intensity_falloff_dd.value,
+        intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
+        intensity_normalisation=intensity_norm_dd.value,
+        log1p=log1p_compression_cb.value,
+        l2=l2_normalisation_cb.value,
+        flatten=False,
     )
 
     _scaled_descriptors = []
@@ -791,7 +857,6 @@ def _(
             descriptor(
                 _modified,
                 params=_params,
-                structure_factor_type=norm_dd.value,
                 form_factor_type=ff_dd.value,
             ).T.ravel()
         )
@@ -808,7 +873,7 @@ def _(
     ]
 
     _hashes = [
-        descriptor_hash(_descriptor, n_words=n_words_slider.value)
+        safe_descriptor_hash(_descriptor, n_words=n_words_slider.value)
         for _descriptor in _descriptor_matrix
     ]
 
@@ -888,13 +953,15 @@ def _(
     compute_structure_factors,
     ff_dd,
     include_odd_l_cb,
+    intensity_falloff_dd,
+    intensity_falloff_u_iso_slider,
+    intensity_norm_dd,
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
     load_cif,
     log1p_compression_cb,
     n_max_slider,
-    norm_dd,
     os,
     power_spectrum_to_vector,
     stol_slider,
@@ -932,6 +999,9 @@ def _(
                 include_odd_l=include_odd_l_cb.value,
                 sin_theta_over_lambda_max=stol_slider.value,
                 radial_basis=basis_dd.value,
+                intensity_normalisation=intensity_norm_dd.value,
+                intensity_falloff=intensity_falloff_dd.value,
+                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 log1p=log1p_compression_cb.value,
                 l2=l2_normalisation_cb.value,
                 flatten=False,
@@ -940,7 +1010,10 @@ def _(
                 _crystal,
                 sin_theta_over_lambda_max=stol_slider.value,
                 form_factor_type=ff_dd.value,
-                structure_factor_type=norm_dd.value,
+                structure_factor_type="F2",
+                intensity_normalisation=intensity_norm_dd.value,
+                intensity_falloff=intensity_falloff_dd.value,
+                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 debug=True,
             )
             _P = compute_power_spectrum(
@@ -964,10 +1037,10 @@ def _(
     P2,
     compute_error,
     compute_error2,
-    descriptor_hash,
     mo,
     n_words_slider,
     plt,
+    safe_descriptor_hash,
     vec,
     vec2,
 ):
@@ -992,8 +1065,8 @@ def _(
     # plt.yscale('log')
     plt.tight_layout()
     print(
-        f"Crystal 1: {descriptor_hash(vec, n_words=n_words_slider.value)}\n",
-        f"Crystal 2: {descriptor_hash(vec2, n_words=n_words_slider.value)}",
+        f"Crystal 1: {safe_descriptor_hash(vec, n_words=n_words_slider.value)}\n",
+        f"Crystal 2: {safe_descriptor_hash(vec2, n_words=n_words_slider.value)}",
     )
     _fig2
     return

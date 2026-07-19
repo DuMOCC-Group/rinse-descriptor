@@ -28,10 +28,22 @@ Structure factor types
 * ``"F"``  — |F(hkl)|
 * ``"F2"`` — |F(hkl)|²  (default)
 
-By default all atoms are assigned isotropic thermal motion with U_iso = 0.01 Å²,
-giving a consistent baseline independent of CIF completeness.  Pass
-``use_reported_adps=True`` to use the displacement parameters as stored in the
-:class:`cctbx.xray.structure` (isotropic or anisotropic, as parsed from the CIF).
+Intensity normalisation
+-----------------------
+* ``"empirical"`` — estimate the resolution envelope of |F|² from adaptive
+    bins in sin(θ)/λ, divide amplitudes by sqrt(envelope), then convert back to
+    the requested output type (default)
+* ``"none"``      — use calculated intensities as-is
+
+Intensity falloff
+-----------------
+* ``"debye_waller"`` — multiply amplitudes by an isotropic Debye-Waller factor
+    with configurable average U_iso (default)
+* ``"none"`` — do not apply an additional falloff
+
+By default, isotropic and anisotropic displacement parameters are used as stored
+in the :class:`cctbx.xray.structure`. Pass ``use_reported_adps=False`` to reset
+all atoms to isotropic thermal motion with U_iso = 0.01 Å².
 """
 
 from __future__ import annotations
@@ -42,9 +54,11 @@ from enum import StrEnum
 from typing import Any, Literal
 
 import numpy as np
-from numpy.typing import NDArray
+from cctbx import xray as _cctbx_xray  # noqa: F401
 
-from ._cctbx_import_patch import patch_cctbx_imports
+# Eager import – must happen before pytest capture is active.
+from iotbx import cif as _iotbx_cif  # noqa: F401
+from numpy.typing import NDArray
 
 # ---------------------------------------------------------------------------
 # Public enumerations
@@ -62,6 +76,16 @@ class StructureFactorType(StrEnum):
     F2 = "F2"
 
 
+class IntensityNormalisation(StrEnum):
+    NONE = "none"
+    EMPIRICAL = "empirical"
+
+
+class IntensityFalloff(StrEnum):
+    NONE = "none"
+    DEBYE_WALLER = "debye_waller"
+
+
 # ---------------------------------------------------------------------------
 # ReflectionList
 # ---------------------------------------------------------------------------
@@ -77,7 +101,8 @@ class ReflectionList:
         Using the crystallographic convention G = h·a* + k·b* + l·c*
         (no 2π factor), so |G| = 2sin(θ)/λ.
     q_magnitudes : (M,) float64 – |G| in Å⁻¹
-    intensities : (M,) float64  – chosen structure factor type (|F|² or |F|)
+    intensities : (M,) float64  – intensities |F|² by default, or amplitudes
+        |F| only when ``structure_factor_type="F"`` is requested directly.
     """
 
     def __init__(
@@ -122,7 +147,12 @@ def compute_structure_factors(
     sin_theta_over_lambda_max: float = 2.0,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
-    use_reported_adps: bool = False,
+    intensity_normalisation: IntensityNormalisation | Literal["none", "empirical"] = "empirical",
+    intensity_normalisation_n_bins: int = 24,
+    intensity_normalisation_min_bin_size: int = 50,
+    intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller",
+    intensity_falloff_u_iso: float = 0.01,
+    use_reported_adps: bool = True,
     debug: bool = False,
 ) -> ReflectionList:
     """Compute structure factors and return a :class:`ReflectionList`.
@@ -137,12 +167,29 @@ def compute_structure_factors(
         Scattering factor type. ``"xray"`` | ``"electron"`` | ``"neutron"``.
     structure_factor_type:
         Output structure factor type. ``"F2"`` | ``"F"``.
+    intensity_normalisation:
+        Resolution-envelope normalisation to apply before output conversion.
+        ``"empirical"`` estimates ⟨|F|²⟩ in adaptive sin(θ)/λ bins, applies
+        ``F' = F / sqrt(envelope)``, then returns either ``|F'|²`` or ``|F'|``.
+    intensity_normalisation_n_bins:
+        Maximum number of adaptive bins for ``"empirical"`` normalisation.
+    intensity_normalisation_min_bin_size:
+        Minimum target reflections per adaptive bin.
+    intensity_falloff:
+        Amplitude falloff to apply after intensity normalisation.
+        ``"debye_waller"`` multiplies amplitudes by
+        ``exp(-8 * pi**2 * U_iso * s**2)``, where ``s = sin(theta)/lambda``.
+    intensity_falloff_u_iso:
+        Average isotropic displacement parameter in Å² for ``"debye_waller"``
+        falloff. Must be non-negative.
     use_reported_adps:
-        If *True*, use displacement parameters from the CIF.  Default *False*:
-        all atoms are reset to isotropic U_iso = 0.01 Å².
+        If *True* (default), use displacement parameters from the CIF. If
+        *False*, all atoms are reset to isotropic U_iso = 0.01 Å².
     """
     ff_type = FormFactorType(form_factor_type)
     sf_type = StructureFactorType(structure_factor_type)
+    intensity_norm = IntensityNormalisation(intensity_normalisation)
+    falloff = IntensityFalloff(intensity_falloff)
 
     d_min = 1.0 / (2.0 * sin_theta_over_lambda_max)
 
@@ -166,6 +213,30 @@ def compute_structure_factors(
 
     _t = time.perf_counter()
     F2 = (F_vals * F_vals.conj()).real.astype(np.float64)
+
+    # Remove (000) and any zero-vector reflections before estimating envelopes.
+    mask = q_magnitudes > 1e-9
+    hkl_arr = hkl_arr[mask].astype(np.int32)
+    q_vectors = q_vectors[mask]
+    q_magnitudes = q_magnitudes[mask]
+    F2 = F2[mask]
+
+    if intensity_norm == IntensityNormalisation.EMPIRICAL:
+        envelope = _empirical_intensity_envelope(
+            q_magnitudes,
+            F2,
+            n_bins=intensity_normalisation_n_bins,
+            min_bin_size=intensity_normalisation_min_bin_size,
+        )
+        F2 = F2 / envelope
+
+    if falloff == IntensityFalloff.DEBYE_WALLER:
+        window = _debye_waller_amplitude_window(
+            q_magnitudes,
+            u_iso=intensity_falloff_u_iso,
+        )
+        F2 = F2 * window * window
+
     if sf_type == StructureFactorType.F2:
         intensities = F2
     else:
@@ -174,17 +245,17 @@ def compute_structure_factors(
         print(
             f"[rinse_descriptor] sf: normalise:        "
             f"{(time.perf_counter() - _t) * 1e3:8.2f} ms  "
-            f"(type={sf_type.value!r})",
+            f"(type={sf_type.value!r}, intensity_normalisation={intensity_norm.value!r}, "
+            f"intensity_falloff={falloff.value!r}, "
+            f"intensity_falloff_u_iso={intensity_falloff_u_iso!r})",
             file=sys.stderr,
         )
 
-    # Remove (000) and any zero-vector reflections
-    mask = q_magnitudes > 1e-9
     return ReflectionList(
-        hkl=hkl_arr[mask].astype(np.int32),
-        q_vectors=q_vectors[mask],
-        q_magnitudes=q_magnitudes[mask],
-        intensities=intensities[mask],
+        hkl=hkl_arr,
+        q_vectors=q_vectors,
+        q_magnitudes=q_magnitudes,
+        intensities=intensities,
     )
 
 
@@ -198,7 +269,7 @@ def _calc_cctbx(
     d_min: float,
     ff_type: FormFactorType,
     *,
-    use_reported_adps: bool = False,
+    use_reported_adps: bool = True,
 ) -> tuple[NDArray[np.int32], NDArray[np.complex128]]:
     """Compute F(hkl) using cctbx and expand to the full reciprocal sphere.
 
@@ -211,8 +282,6 @@ def _calc_cctbx(
     3. ``expand_to_p1()`` → all space-group equivalents; with anomalous=True
        this directly yields the full sphere.
     """
-    patch_cctbx_imports()
-
     xrs_calc = xrs.deep_copy_scatterers()
 
     if not use_reported_adps:
@@ -237,3 +306,56 @@ def _calc_cctbx(
     F_vals = np.array(list(fc_p1.data()), dtype=np.complex128)
 
     return hkl, F_vals
+
+
+def _empirical_intensity_envelope(
+    q_magnitudes: NDArray[np.float64],
+    intensities: NDArray[np.float64],
+    *,
+    n_bins: int = 24,
+    min_bin_size: int = 50,
+) -> NDArray[np.float64]:
+    """Estimate <|F|²> as an adaptive-bin function of sin(theta)/lambda."""
+    if q_magnitudes.shape != intensities.shape:
+        raise ValueError("q_magnitudes and intensities must have the same shape")
+    if n_bins < 1:
+        raise ValueError(f"n_bins must be >= 1, got {n_bins}")
+    if min_bin_size < 1:
+        raise ValueError(f"min_bin_size must be >= 1, got {min_bin_size}")
+
+    finite = np.isfinite(q_magnitudes) & np.isfinite(intensities) & (intensities > 0.0)
+    if not np.any(finite):
+        return np.ones_like(intensities, dtype=np.float64)
+
+    s = 0.5 * q_magnitudes
+    n_positive = int(finite.sum())
+    adaptive_n_bins = min(n_bins, max(1, n_positive // min_bin_size))
+    order = np.argsort(s[finite])
+    finite_indices = np.flatnonzero(finite)[order]
+
+    centers = np.empty(adaptive_n_bins, dtype=np.float64)
+    means = np.empty(adaptive_n_bins, dtype=np.float64)
+    for i, bin_indices in enumerate(np.array_split(finite_indices, adaptive_n_bins)):
+        centers[i] = float(np.mean(s[bin_indices]))
+        means[i] = float(np.mean(intensities[bin_indices]))
+
+    if adaptive_n_bins == 1:
+        envelope = np.full_like(intensities, means[0], dtype=np.float64)
+    else:
+        envelope = np.interp(s, centers, means)
+
+    floor = np.finfo(np.float64).tiny
+    return np.maximum(envelope, floor)
+
+
+def _debye_waller_amplitude_window(
+    q_magnitudes: NDArray[np.float64],
+    *,
+    u_iso: float = 0.01,
+) -> NDArray[np.float64]:
+    """Isotropic Debye-Waller amplitude factor over s = sin(theta)/lambda."""
+    if u_iso < 0.0:
+        raise ValueError(f"u_iso must be >= 0, got {u_iso}")
+
+    s = 0.5 * q_magnitudes
+    return np.exp(-8.0 * np.pi**2 * u_iso * s * s)
