@@ -42,11 +42,9 @@ from enum import StrEnum
 from typing import Any, Literal
 
 import numpy as np
-from cctbx import xray as _cctbx_xray  # noqa: F401
-
-# Eager import – must happen before pytest capture is active.
-from iotbx import cif as _iotbx_cif  # noqa: F401
 from numpy.typing import NDArray
+
+from ._cctbx_import_patch import patch_cctbx_imports
 
 # ---------------------------------------------------------------------------
 # Public enumerations
@@ -213,6 +211,8 @@ def _calc_cctbx(
     3. ``expand_to_p1()`` → all space-group equivalents; with anomalous=True
        this directly yields the full sphere.
     """
+    patch_cctbx_imports()
+
     xrs_calc = xrs.deep_copy_scatterers()
 
     if not use_reported_adps:

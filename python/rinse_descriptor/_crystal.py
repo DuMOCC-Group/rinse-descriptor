@@ -11,8 +11,7 @@ import os
 import re
 from typing import IO, Any, cast
 
-# Eager import – must happen before pytest capture is active.
-from iotbx import cif as _iotbx_cif  # noqa: F401
+from ._cctbx_import_patch import patch_cctbx_imports
 
 # Matches an _atom_site loop that has column headers but no data rows.
 # Such CIFs cause iotbx.cif to fail silently or segfault during parsing.
@@ -37,6 +36,8 @@ def load_cif(path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Any:
     The asymmetric unit is stored with its original space group; it is
     expanded to P1 lazily during structure-factor calculation.
     """
+    patch_cctbx_imports()
+
     from iotbx import cif as iotbx_cif
 
     if hasattr(path, "read"):

@@ -20,26 +20,20 @@ from __future__ import annotations
 import sys
 import time
 from collections.abc import Sequence
-from typing import Any, Literal
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, Literal
 
-import numpy as np
-from numpy.typing import NDArray
-
-from . import _cctbx_win_patch  # noqa: F401 – must precede any iotbx/cctbx import
+from ._cctbx_import_patch import patch_cctbx_imports
 from ._crystal import load_cif
-from ._descriptor import (
-    RinseParams,
-    compute_power_spectrum,
-    normalise_power_spectrum,
-    power_spectrum_to_vector,
-)
-from ._hash import DEFAULT_HASH_WORDS, descriptor_hash, hash_to_bits
-from ._structure_factors import (
-    FormFactorType,
-    ReflectionList,
-    StructureFactorType,
-    compute_structure_factors,
-)
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
+
+    from ._descriptor import RinseParams
+    from ._structure_factors import FormFactorType, StructureFactorType
+
+patch_cctbx_imports()
 
 __version__ = "0.1.0"
 __all__ = [
@@ -57,6 +51,30 @@ __all__ = [
     "hash_to_bits",
     "DEFAULT_HASH_WORDS",
 ]
+
+_LAZY_EXPORTS = {
+    "DEFAULT_HASH_WORDS": ("._hash", "DEFAULT_HASH_WORDS"),
+    "FormFactorType": ("._structure_factors", "FormFactorType"),
+    "ReflectionList": ("._structure_factors", "ReflectionList"),
+    "RinseParams": ("._descriptor", "RinseParams"),
+    "StructureFactorType": ("._structure_factors", "StructureFactorType"),
+    "compute_power_spectrum": ("._descriptor", "compute_power_spectrum"),
+    "compute_structure_factors": ("._structure_factors", "compute_structure_factors"),
+    "descriptor_hash": ("._hash", "descriptor_hash"),
+    "hash_to_bits": ("._hash", "hash_to_bits"),
+    "normalise_power_spectrum": ("._descriptor", "normalise_power_spectrum"),
+    "power_spectrum_to_vector": ("._descriptor", "power_spectrum_to_vector"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module_name, attr_name = _LAZY_EXPORTS[name]
+    value = getattr(import_module(module_name, __name__), attr_name)
+    globals()[name] = value
+    return value
 
 
 def descriptor(
@@ -94,6 +112,9 @@ def descriptor(
     ``(n_max, n_l_levels)`` [flatten=False].
     """
     import pathlib
+
+    from ._descriptor import RinseParams, compute_power_spectrum, power_spectrum_to_vector
+    from ._structure_factors import compute_structure_factors
 
     t0 = time.perf_counter()
 
@@ -175,6 +196,8 @@ def descriptor_many(
     ndarray of shape (N, descriptor_length) [default, flatten=True] or
     (N, n_max, n_l_levels) [flatten=False].
     """
+    import numpy as np
+
     results = [
         descriptor(
             s,
