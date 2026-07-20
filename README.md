@@ -56,6 +56,19 @@ uv sync
 uv run marimo edit demo.py
 ```
 
+### Optional CSD API Installation for PCA analysis
+To recompute the PCA components used for the dimensionality reduction in the locality-sensitive hash (see [Locality-sensitive hashing](#locality-sensitive-hashing) below), install the CSD Python API and run the scripts in the tools folder.
+```bash
+# Install CSD Python API
+uv pip install --extra-index-url https://pip.ccdc.cam.ac.uk/ csd-python-api
+
+# Generate descriptors for CSD structures
+uv run tools/compute_csd_hashes.py 
+
+# Perform PCA analysis and update components in python/rinse_descriptor/data folder
+uv run tools/compute_pca.py 
+```
+
 ### From PyPI
 
 ```bash
@@ -134,6 +147,63 @@ For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic
 displacement parameter used in the amplitude factor
 `exp(-8 * pi**2 * U_iso * (sin(theta)/lambda)**2)`; the default is `0.01` Å².
 
+## Locality-sensitive hashing
+
+RINSE provides a **deterministic locality-sensitive hash** that converts descriptor vectors into short, pronounceable strings (proquints) for quick similarity comparisons and indexing.
+
+### Basic usage
+
+```python
+from rinse_descriptor import descriptor, descriptor_hash
+
+x = descriptor("mystructure.cif")
+hash_str = descriptor_hash(x)
+print(hash_str)  # e.g., "lusab"
+
+# Generate longer hashes with more words (each word = 16 bits)
+hash_str = descriptor_hash(x, n_words=5)
+print(hash_str)  # e.g., "lusab-babad-gutih-tugad-mudof"
+```
+
+### Algorithm
+
+The hash is computed using **PCA-based SimHash**:
+
+1. **Project** the descriptor vector onto the first *n* principal components (PCA model precomputed from the CSD and bundled with the package)
+2. **Binarize** each projection coefficient by its sign: `bits[i] = (projection[i] > 0)`
+3. **Encode** each 16-bit chunk as a five-character **proquint** word (`CVCVC` pattern using consonants for 4-bit values and vowels for 2-bit values)
+
+By default, `n_words=1` produces a single 5-character word encoding 16 hash bits. Structurally similar crystals produce similar hash bits and thus identical or nearby proquint strings.
+
+### Properties
+
+- **Deterministic**: The same descriptor always produces the same hash
+- **Locality-sensitive**: Similar descriptors map to similar hash bits
+- **Pronounceable**: Uses the proquint encoding (`babab`, `zuzuz`, etc.) for human-readability
+- **PCA-based**: Uses learned principal components from the Cambridge Structural Database rather than random projections
+
+### Decode hash to bits
+
+```python
+from rinse_descriptor import descriptor_hash, hash_to_bits
+import numpy as np
+
+hash_str = descriptor_hash(x, n_words=3)
+bits = hash_to_bits(hash_str)
+print(bits.shape)  # (48,) — 3 words × 16 bits/word
+print(bits.dtype)  # bool
+```
+
+### Custom PCA model
+
+To use your own PCA model (e.g., trained on a different dataset):
+
+```python
+hash_str = descriptor_hash(x, n_words=5, pca_file="my_pca_components.json")
+```
+
+The JSON file must contain `"components"` (2-D array) and `"mean"` (1-D array) keys.
+
 ## Development
 
 ```bash
@@ -169,11 +239,14 @@ uv run pre-commit run --all-files
 ```
 rinse-descriptor/
 ├── python/rinse_descriptor/  # Python package
-│   ├── __init__.py        # Public API: descriptor(), descriptor_many()
+│   ├── __init__.py        # Public API: descriptor(), descriptor_many(), descriptor_hash(), hash_to_bits()
 │   ├── _crystal.py        # CIF loading into cctbx xray.structure objects
 │   ├── _structure_factors.py  # cctbx structure factor calculation
 │   ├── _radial_basis.py   # Chebyshev / Bessel / smooth-shell radial bases
-│   └── _descriptor.py     # Power spectrum computation
+│   ├── _descriptor.py     # Power spectrum computation
+│   ├── _hash.py           # Locality-sensitive hashing via PCA-based SimHash
+│   └── data/
+│       └── pca_components.json  # Precomputed PCA model for hashing
 ├── tests/                 # pytest test suite
 ├── benchmarks/            # pytest-benchmark suite
 ├── .github/workflows/ci.yml
