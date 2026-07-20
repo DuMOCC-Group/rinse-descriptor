@@ -142,7 +142,7 @@ class TestStructureFactors:
     def test_default_intensity_normalisation_is_empirical(self, ylid: object) -> None:
         assert RinseParams().intensity_normalisation == "empirical"
         assert RinseParams().intensity_falloff == "debye_waller"
-        assert RinseParams().intensity_falloff_u_iso == 0.01
+        assert RinseParams().intensity_falloff_u_iso == 0.05
         assert RinseParams().use_reported_adps is True
 
         refls_default = compute_structure_factors(
@@ -154,7 +154,7 @@ class TestStructureFactors:
             sin_theta_over_lambda_max=0.6,
             intensity_normalisation="empirical",
             intensity_falloff="debye_waller",
-            intensity_falloff_u_iso=0.01,
+            intensity_falloff_u_iso=0.05,
         )
         np.testing.assert_allclose(refls_default.intensities, refls_explicit.intensities)
 
@@ -170,14 +170,14 @@ class TestStructureFactors:
             sin_theta_over_lambda_max=0.6,
             intensity_normalisation="empirical",
             intensity_falloff="debye_waller",
-            intensity_falloff_u_iso=0.01,
+            intensity_falloff_u_iso=0.05,
         )
 
         s = 0.5 * refls_debye_waller.q_magnitudes
         high_s = s > np.quantile(s, 0.9)
         np.testing.assert_allclose(
             refls_debye_waller.intensities / refls_no_falloff.intensities,
-            np.exp(-16.0 * np.pi**2 * 0.01 * s * s),
+            np.exp(-16.0 * np.pi**2 * 0.05 * s * s),
             rtol=1e-12,
         )
         assert np.mean(refls_debye_waller.intensities[high_s]) < np.mean(
@@ -187,7 +187,7 @@ class TestStructureFactors:
 
     def test_invalid_debye_waller_u_iso_rejected(self) -> None:
         with pytest.raises(ValueError, match="intensity_falloff_u_iso"):
-            RinseParams(intensity_falloff_u_iso=-0.01)
+            RinseParams(intensity_falloff_u_iso=-0.05)
 
     def test_reflection_count_positive(self, nacl: object) -> None:
         refls = compute_structure_factors(nacl, sin_theta_over_lambda_max=1.0)
