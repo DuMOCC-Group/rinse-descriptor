@@ -9,11 +9,10 @@ and angular basis (analogous to SOAP, but working entirely in reciprocal space).
 For a crystal, all reflections $\mathbf{G}_{\mathrm{hkl}}$ within a resolution cutoff
 (default $\sin{\theta}/\lambda \leq 0.6 Å^{-1}$, i.e. $|\mathbf{G}| \leq 1.2 Å^{-1}$) are enumerated.
 Each reflection is assigned an intensity $\mathrm{I}(\mathbf{G}) = \lvert\mathrm{F}(\mathbf{G})\rvert^{2}$ from the
-structure factor calculated via cctbx direct summation with Waasmaier-Kirfel
-X-ray form factors by default. The descriptor is always weighted by intensities,
-not amplitudes. Isotropic and anisotropic displacement parameters are read from
+structure factor calculated via cctbx direct summation with 
+X-ray form factors by default. Isotropic and anisotropic displacement parameters are read from
 the CIF by default; empirical reciprocal-space intensity normalisation then
-removes the mean resolution envelope, followed by an isotropic Debye-Waller
+removes the mean resolution dependence, followed by an isotropic Debye-Waller (Uiso = 0.01)
 falloff that softly damps high-resolution reflections.
 
 The expansion coefficients are:
@@ -145,7 +144,7 @@ Available `intensity_normalisation` values: `"empirical"` (default), `"none"`.
 Available `intensity_falloff` values: `"debye_waller"` (default), `"none"`.
 For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic
 displacement parameter used in the amplitude factor
-`exp(-8 * pi**2 * U_iso * (sin(theta)/lambda)**2)`; the default is `0.01` Å².
+$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.01` Å².
 
 ## Locality-sensitive hashing
 
