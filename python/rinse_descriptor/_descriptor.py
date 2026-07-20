@@ -109,7 +109,7 @@ class RinseParams:
     use_reported_adps:
         If *True* (default), use displacement parameters as reported in the CIF
         (isotropic or anisotropic). If *False*, all atoms are assigned isotropic
-        thermal motion with U_iso = 0.01 Å².
+        thermal motion with U_iso = 0.05 Å².
     """
 
     n_max: int = 8
@@ -119,10 +119,10 @@ class RinseParams:
     sin_theta_over_lambda_max: float = 0.6
     radial_basis: RadialBasisType = "smooth_shells_nl"
     intensity_normalisation: IntensityNormalisation | Literal["none", "empirical"] = "empirical"
-    intensity_normalisation_n_bins: int = 24
+    intensity_normalisation_n_bins: int = 6
     intensity_normalisation_min_bin_size: int = 50
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller"
-    intensity_falloff_u_iso: float = 0.01
+    intensity_falloff_u_iso: float = 0.05
     use_reported_adps: bool = True
     log1p: bool = False
     l2: bool = True

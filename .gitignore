@@ -80,5 +80,7 @@ crystal_pickles/
 umap_hdbscan_results.csv
 
 # CSD hash computation outputs (tools/)
-csd_descriptors.pkl
-csd_hashes.csv
+csd_descriptors*
+csd_hashes*
+convergence_history.csv
+pca_components_prefix*

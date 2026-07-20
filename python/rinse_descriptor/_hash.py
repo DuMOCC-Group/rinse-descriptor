@@ -132,7 +132,7 @@ def _proquint_to_int16(word: str) -> int:
 # ---------------------------------------------------------------------------
 # Any proquint word containing one of these substrings is replaced by flipping
 # its LSB, yielding a different valid proquint that is not a recognisable word.
-_BLOCKED_SUBSTRINGS: tuple[str, ...] = ("fag", "nud", "jihad")
+_BLOCKED_SUBSTRINGS: tuple[str, ...] = ("fag", "nud", "jihad", "fuk")
 
 
 def _sanitise_word(word: str) -> str:

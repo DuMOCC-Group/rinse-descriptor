@@ -43,7 +43,7 @@ Intensity falloff
 
 By default, isotropic and anisotropic displacement parameters are used as stored
 in the :class:`cctbx.xray.structure`. Pass ``use_reported_adps=False`` to reset
-all atoms to isotropic thermal motion with U_iso = 0.01 Å².
+all atoms to isotropic thermal motion with U_iso = 0.05 Å².
 """
 
 from __future__ import annotations
@@ -148,10 +148,10 @@ def compute_structure_factors(
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
     intensity_normalisation: IntensityNormalisation | Literal["none", "empirical"] = "empirical",
-    intensity_normalisation_n_bins: int = 24,
+    intensity_normalisation_n_bins: int = 6,
     intensity_normalisation_min_bin_size: int = 50,
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller",
-    intensity_falloff_u_iso: float = 0.01,
+    intensity_falloff_u_iso: float = 0.05,
     use_reported_adps: bool = True,
     debug: bool = False,
 ) -> ReflectionList:
@@ -312,10 +312,16 @@ def _empirical_intensity_envelope(
     q_magnitudes: NDArray[np.float64],
     intensities: NDArray[np.float64],
     *,
-    n_bins: int = 24,
+    n_bins: int = 6,
     min_bin_size: int = 50,
 ) -> NDArray[np.float64]:
-    """Estimate <|F|²> as an adaptive-bin function of sin(theta)/lambda."""
+    """Estimate <|F|²> as a smoothed function of sin(theta)/lambda.
+
+    The raw intensities are first averaged in adaptive resolution bins, then a
+    Gaussian kernel smoother is applied to the log bin means. Working in
+    log-space keeps the envelope strictly positive while avoiding the kinks from
+    piecewise-linear interpolation.
+    """
     if q_magnitudes.shape != intensities.shape:
         raise ValueError("q_magnitudes and intensities must have the same shape")
     if n_bins < 1:
@@ -335,23 +341,39 @@ def _empirical_intensity_envelope(
 
     centers = np.empty(adaptive_n_bins, dtype=np.float64)
     means = np.empty(adaptive_n_bins, dtype=np.float64)
+    counts = np.empty(adaptive_n_bins, dtype=np.float64)
     for i, bin_indices in enumerate(np.array_split(finite_indices, adaptive_n_bins)):
         centers[i] = float(np.mean(s[bin_indices]))
         means[i] = float(np.mean(intensities[bin_indices]))
+        counts[i] = float(len(bin_indices))
 
+    floor = np.finfo(np.float64).tiny
     if adaptive_n_bins == 1:
         envelope = np.full_like(intensities, means[0], dtype=np.float64)
     else:
-        envelope = np.interp(s, centers, means)
+        log_means = np.log(np.maximum(means, floor))
+        center_diffs = np.diff(centers)
+        bandwidth = max(
+            float(np.median(center_diffs[center_diffs > 0.0]))
+            if np.any(center_diffs > 0.0)
+            else 0.0,
+            float((centers[-1] - centers[0]) / adaptive_n_bins),
+            np.finfo(np.float64).eps,
+        )
+        distances = (s[:, None] - centers[None, :]) / bandwidth
+        weights = np.exp(-0.5 * distances * distances) * counts[None, :]
+        smoothed_log_means = (weights @ log_means) / np.maximum(
+            weights.sum(axis=1), np.finfo(np.float64).tiny
+        )
+        envelope = np.exp(smoothed_log_means)
 
-    floor = np.finfo(np.float64).tiny
     return np.maximum(envelope, floor)
 
 
 def _debye_waller_amplitude_window(
     q_magnitudes: NDArray[np.float64],
     *,
-    u_iso: float = 0.01,
+    u_iso: float = 0.05,
 ) -> NDArray[np.float64]:
     """Isotropic Debye-Waller amplitude factor over s = sin(theta)/lambda."""
     if u_iso < 0.0:

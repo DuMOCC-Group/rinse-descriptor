@@ -58,6 +58,37 @@ The JSON file contains:
 - `singular_values`: Singular values from SVD
 - `n_components`, `n_samples`, `n_features`: Model metadata
 
+### `converge_csd_hashes.py`
+
+Runs `compute_csd_hashes.py` and `compute_pca.py` on progressively larger
+prefixes of a chunked CSD split until hashes for a fixed test chunk stop
+changing.
+
+**Default workflow:**
+- Split the CSD into `1000` chunks
+- Use chunk `0` as the fixed convergence subset
+- Refit PCA after each additional chunk
+- Stop when the chunk-0 hashes are unchanged for one evaluation round
+
+**Usage:**
+```bash
+# Default convergence run: 1000 chunks, test chunk 0
+uv run tools/converge_csd_hashes.py
+
+# Require two consecutive unchanged rounds before accepting convergence
+uv run tools/converge_csd_hashes.py --stable-rounds 2
+
+# Limit the run while testing the workflow
+uv run tools/converge_csd_hashes.py --max-chunks 25 --work-dir tmp/convergence
+```
+
+**Outputs:**
+- `convergence_runs/csd_descriptors_chunk_N.pkl`: per-chunk descriptor pickles
+- `convergence_runs/csd_descriptors_prefix_N.pkl`: cumulative descriptor pickles used for PCA
+- `convergence_runs/pca_components_prefix_N.json`: PCA model after each evaluation round
+- `convergence_runs/convergence_history.csv`: per-round convergence summary
+- `../python/rinse_descriptor/data/pca_components.json`: copied only after convergence by default
+
 ### `merge_chunks.py`
 
 Merges chunk files produced by parallel runs of `compute_csd_hashes.py`.
@@ -104,6 +135,12 @@ To update the PCA model distributed with the package:
    python compute_pca.py
    ```
    This generates `../python/rinse_descriptor/data/pca_components.json` that will be bundled with the package.
+
+   Or, to estimate when the hash assignments have stabilised before updating the
+   bundled PCA model:
+   ```bash
+   uv run tools/converge_csd_hashes.py
+   ```
 
 3. **Test the hash function:**
    ```python
