@@ -262,7 +262,3 @@ The package is designed to support a future `rinse_descriptor.diffraction` submo
 
 The `ReflectionList` and `RinseParams` types are designed to be shared between
 the core descriptor and the diffraction submodule.
-
-## License
-
-MIT
