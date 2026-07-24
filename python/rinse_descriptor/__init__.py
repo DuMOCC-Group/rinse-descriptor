@@ -92,7 +92,7 @@ def descriptor(
         ``"xray"`` | ``"electron"`` | ``"neutron"``.
     use_reported_adps:
         If *True*, use displacement parameters from the CIF. If *False*, all
-        atoms are reset to isotropic U_iso = 0.01 Å². Uses
+        atoms are reset to isotropic U_iso = 0.05 Å². Uses
         ``params.use_reported_adps`` when *None*.
 
     Notes
@@ -188,7 +188,7 @@ def descriptor_many(
         Passed to :func:`descriptor`.
     use_reported_adps:
         If *True*, use displacement parameters from the CIF. If *False*, all
-        atoms are reset to isotropic U_iso = 0.01 Å². Uses
+        atoms are reset to isotropic U_iso = 0.05 Å². Uses
         ``params.use_reported_adps`` when *None*.
 
     Returns

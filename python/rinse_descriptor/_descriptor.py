@@ -18,9 +18,9 @@ contributions from odd-l harmonics cancel exactly.  Only even l contribute:
     l ∈ {0, 2, 4, …, 2*(L-1)}  for L angular levels.
 
 Default parameters:
-    n_max = 8  → radial indices 0 … 7
-    l_max = 32  → angular levels: l ∈ {0, 2, 4, …, 30}  (16 levels)
-    Output: (8, 16) matrix  → flattened to 128-element vector
+    n_max = 16  → radial indices 0 … 15
+    l_min = 4, l_max = 20  → angular levels: l ∈ {4, 6, …, 18}  (8 levels)
+    Output: (16, 8) matrix  → flattened to 128-element vector
             axis-0 = radial index n
             axis-1 = angular level index
 
@@ -57,9 +57,9 @@ class RinseParams:
     Attributes
     ----------
     n_max:
-        Number of radial basis functions (n = 0 … n_max-1).  Default 8.
+        Number of radial basis functions (n = 0 … n_max-1).  Default 16.
     l_max:
-        Maximum ℓ value (exclusive).  Default 32.
+        Maximum ℓ value (exclusive).  Default 20.
         When ``include_odd_l=False`` (default), angular levels are the even
         values ℓ ∈ {l_min, l_min+2, …, l_max-2} and l_min/l_max must be even.
         When ``include_odd_l=True``, all integers ℓ ∈ {l_min, …, l_max-1}
@@ -114,8 +114,8 @@ class RinseParams:
         thermal motion with U_iso = 0.05 Å².
     """
 
-    n_max: int = 8
-    l_max: int = 36
+    n_max: int = 16
+    l_max: int = 20
     l_min: int = 4
     include_odd_l: bool = False
     sin_theta_over_lambda_max: float = 0.6
@@ -123,8 +123,8 @@ class RinseParams:
     intensity_normalisation: (
         IntensityNormalisation | Literal["none", "double_exponential", "empirical"]
     ) = "double_exponential"
-    intensity_normalisation_n_bins: int = 6
-    intensity_normalisation_min_bin_size: int = 50
+    intensity_normalisation_n_bins: int | None = None
+    intensity_normalisation_min_bin_size: int | None = None
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller"
     intensity_falloff_u_iso: float = 0.05
     use_reported_adps: bool = True
@@ -141,12 +141,18 @@ class RinseParams:
         if self.l_min >= self.l_max:
             raise ValueError(f"l_min ({self.l_min}) must be less than l_max ({self.l_max})")
         self.intensity_normalisation = IntensityNormalisation(self.intensity_normalisation)
-        if self.intensity_normalisation_n_bins < 1:
+        if (
+            self.intensity_normalisation_n_bins is not None
+            and self.intensity_normalisation_n_bins < 1
+        ):
             raise ValueError(
                 "intensity_normalisation_n_bins must be >= 1, "
                 f"got {self.intensity_normalisation_n_bins}"
             )
-        if self.intensity_normalisation_min_bin_size < 1:
+        if (
+            self.intensity_normalisation_min_bin_size is not None
+            and self.intensity_normalisation_min_bin_size < 1
+        ):
             raise ValueError(
                 "intensity_normalisation_min_bin_size must be >= 1, "
                 f"got {self.intensity_normalisation_min_bin_size}"

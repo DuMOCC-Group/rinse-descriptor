@@ -7,7 +7,7 @@ Structures tested:
   - 1-Methylpiperazinium oxalate dihydrate
 
 Properties verified:
-  - Descriptor shape: 128 elements by default (flat 1-D), (8, 16) when flatten=False
+    - Descriptor shape: 128 elements by default (flat 1-D), (16, 8) when flatten=False
   - Consistency: two calls with identical input return identical output
   - Non-negativity
   - Atom substitution sensitivity
@@ -85,7 +85,8 @@ class TestDescriptorShape:
     def test_descriptor_many_shape(self, nacl: object, silicon: object, ylid: object) -> None:
         params = RinseParams(flatten=False)
         X = descriptor_many([nacl, silicon, ylid], params=params)
-        assert X.shape == (3, 8, 16), f"Expected (3, 8, 16), got {X.shape}"
+        expected_shape = (3, *params.descriptor_shape)
+        assert X.shape == expected_shape, f"Expected {expected_shape}, got {X.shape}"
 
     def test_descriptor_many_flat_default(self, nacl: object, silicon: object) -> None:
         X = descriptor_many([nacl, silicon])

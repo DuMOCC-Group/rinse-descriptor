@@ -11,8 +11,8 @@ For a crystal, all reflections $\mathbf{G}_{\mathrm{hkl}}$ within a resolution c
 Each reflection is assigned an intensity $\mathrm{I}(\mathbf{G}) = \lvert\mathrm{F}(\mathbf{G})\rvert^{2}$ from the
 structure factor calculated via cctbx direct summation with 
 X-ray form factors by default. Isotropic and anisotropic displacement parameters are read from
-the CIF by default; empirical reciprocal-space intensity normalisation then
-removes the mean resolution dependence, followed by an isotropic Debye-Waller (Uiso = 0.01)
+the CIF by default; double-exponential reciprocal-space intensity normalisation then
+removes the mean resolution dependence, followed by an isotropic Debye-Waller (Uiso = 0.05)
 falloff that softly damps high-resolution reflections.
 
 The expansion coefficients are:
@@ -29,12 +29,12 @@ $$
 
 Because the intensity field is centrosymmetric if anomalous dispersion is not considered, only even *l*
 contributes. By default, RINSE also drops the monopole (*l* = 0) and quadrupole
-(*l* = 2) terms. Default parameters give a **8 × 16 = 128-element** descriptor:
+(*l* = 2) terms. Default parameters give a **16 × 8 = 128-element** descriptor:
 
 | Axis | Values | Count |
 |------|--------|-------|
-| Radial (*n*) | 0, 1, …, 7 | 8 |
-| Angular (*l*) | 4, 6, 8, …, 34 (even only) | 16 |
+| Radial (*n*) | 0, 1, …, 15 | 16 |
+| Angular (*l*) | 4, 6, 8, …, 18 (even only) | 8 |
 
 ## Installation
 
@@ -90,7 +90,7 @@ print(x.shape)  # (128,)
 # Return the 2-D power-spectrum matrix instead
 params = RinseParams(flatten=False)
 x_mat = descriptor("mystructure.cif", params=params)
-print(x_mat.shape)  # (8, 16)
+print(x_mat.shape)  # (16, 8)
 
 # Batch of structures → (N, 128)
 structures = ["structure_1.cif", "structure_2.cif"]
@@ -118,7 +118,7 @@ params = RinseParams(
     l_max=36,                       # angular levels (gives l = 4,6,...,34 by default)
     sin_theta_over_lambda_max=0.6,  # resolution cutoff in Å⁻¹
     radial_basis="chebyshev",       # or "bessel" / "smooth_shells_cw" / "smooth_shells_nl"
-    intensity_normalisation="none",  # optional: disable the default empirical envelope removal
+    intensity_normalisation="none",  # optional: disable the default double-exponential envelope removal
     intensity_falloff="none",        # optional: disable the default Debye-Waller falloff
 )
 x = descriptor("mystructure.cif", params=params)
@@ -145,7 +145,7 @@ Available `intensity_normalisation` values:
 Available `intensity_falloff` values: `"debye_waller"` (default), `"none"`.
 For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic
 displacement parameter used in the amplitude factor
-$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.01` Å².
+$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.05` Å².
 
 ## Locality-sensitive hashing
 

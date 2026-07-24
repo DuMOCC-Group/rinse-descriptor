@@ -154,8 +154,8 @@ def compute_structure_factors(
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
     intensity_normalisation: IntensityNormalisation
     | Literal["none", "double_exponential", "empirical"] = "double_exponential",
-    intensity_normalisation_n_bins: int = 6,
-    intensity_normalisation_min_bin_size: int = 50,
+    intensity_normalisation_n_bins: int | None = 6,
+    intensity_normalisation_min_bin_size: int | None = 50,
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller",
     intensity_falloff_u_iso: float = 0.05,
     use_reported_adps: bool = True,
@@ -182,8 +182,9 @@ def compute_structure_factors(
         ``F' = F / sqrt(envelope)``, then returns either ``|F'|²`` or ``|F'|``.
     intensity_normalisation_n_bins:
         Maximum number of adaptive bins for ``"empirical"`` normalisation.
+        If *None*, uses 6.
     intensity_normalisation_min_bin_size:
-        Minimum target reflections per adaptive bin.
+        Minimum target reflections per adaptive bin. If *None*, uses 50.
     intensity_falloff:
         Amplitude falloff to apply after intensity normalisation.
         ``"debye_waller"`` multiplies amplitudes by
@@ -193,7 +194,7 @@ def compute_structure_factors(
         falloff. Must be non-negative.
     use_reported_adps:
         If *True* (default), use displacement parameters from the CIF. If
-        *False*, all atoms are reset to isotropic U_iso = 0.01 Å².
+        *False*, all atoms are reset to isotropic U_iso = 0.05 Å².
     """
     ff_type = FormFactorType(form_factor_type)
     sf_type = StructureFactorType(structure_factor_type)
@@ -234,11 +235,17 @@ def compute_structure_factors(
         envelope = _double_exponential_intensity_envelope(q_magnitudes, F2)
         F2 = F2 / envelope
     elif intensity_norm == IntensityNormalisation.EMPIRICAL:
+        n_bins = 6 if intensity_normalisation_n_bins is None else intensity_normalisation_n_bins
+        min_bin_size = (
+            50
+            if intensity_normalisation_min_bin_size is None
+            else intensity_normalisation_min_bin_size
+        )
         envelope = _empirical_intensity_envelope(
             q_magnitudes,
             F2,
-            n_bins=intensity_normalisation_n_bins,
-            min_bin_size=intensity_normalisation_min_bin_size,
+            n_bins=n_bins,
+            min_bin_size=min_bin_size,
         )
         F2 = F2 / envelope
 
@@ -297,13 +304,13 @@ def _calc_cctbx(
     xrs_calc = xrs.deep_copy_scatterers()
 
     if not use_reported_adps:
-        # Reset every atom to isotropic U_iso = 0.01 Å², giving a consistent
+        # Reset every atom to isotropic U_iso = 0.05 Å², giving a consistent
         # baseline regardless of what (if anything) was reported in the CIF.
         xrs_calc.convert_to_isotropic()
         scs = xrs_calc.scatterers()
         for i in range(scs.size()):
             sc = scs[i]
-            sc.u_iso = 0.01
+            sc.u_iso = 0.05
             scs[i] = sc
 
     xrs_calc.scattering_type_registry(table=_CCTBX_TABLES[ff_type])

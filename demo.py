@@ -75,11 +75,11 @@ def _(mo):
     **Reciprocal-space INvariant Spectral Embedding*
 
     Computes the intensity-weighted reciprocal-space power spectrum for any
-    crystal structure. The descriptor is by default a **8 × 16 matrix** (128 elements)
+    crystal structure. The descriptor is by default a **16 × 8 matrix** (128 elements)
     indexed by radial order *n* and even angular
-    level *ℓ* ∈ {0, 2, 4, …, 62}.
+    level *ℓ* ∈ {4, 6, 8, …, 18}.
 
-    Descriptor weights are intensities, I = |F|². The default empirical
+    Descriptor weights are intensities, I = |F|². The default double-exponential
     intensity normalisation removes the mean resolution-dependent intensity
     envelope, then an isotropic Debye-Waller falloff softly damps high-resolution
     reflections before the power spectrum is accumulated.
@@ -127,7 +127,7 @@ def _(mo):
 
     Intensity falloff applies an amplitude window after normalisation. The
     default Debye-Waller falloff multiplies amplitudes by exp(-8π² U_iso s²),
-    where s = sin(theta)/lambda and U_iso defaults to 0.01 Å².
+    where s = sin(theta)/lambda and U_iso defaults to 0.05 Å².
 
     log1p compression reduces the dynamic range of the descriptor.
     This is generally required when monopoles are included.
@@ -175,7 +175,7 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
     )
     basis_dd = mo.ui.dropdown(
         options=["chebyshev", "bessel", "smooth_shells_cw", "smooth_shells_nl"],
-        value="smooth_shells_nl",  # demo default; library default is "chebyshev"
+        value="smooth_shells_nl",  # matches the library default
         label="Radial basis",
     )
     ff_dd = mo.ui.dropdown(
