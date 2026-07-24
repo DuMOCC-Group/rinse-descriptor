@@ -139,8 +139,8 @@ class TestNonNegativity:
 
 
 class TestStructureFactors:
-    def test_default_intensity_normalisation_is_empirical(self, ylid: object) -> None:
-        assert RinseParams().intensity_normalisation == "empirical"
+    def test_default_intensity_normalisation_is_double_exponential(self, ylid: object) -> None:
+        assert RinseParams().intensity_normalisation == "double_exponential"
         assert RinseParams().intensity_falloff == "debye_waller"
         assert RinseParams().intensity_falloff_u_iso == 0.05
         assert RinseParams().use_reported_adps is True
@@ -152,11 +152,21 @@ class TestStructureFactors:
         refls_explicit = compute_structure_factors(
             ylid,
             sin_theta_over_lambda_max=0.6,
-            intensity_normalisation="empirical",
+            intensity_normalisation="double_exponential",
             intensity_falloff="debye_waller",
             intensity_falloff_u_iso=0.05,
         )
         np.testing.assert_allclose(refls_default.intensities, refls_explicit.intensities)
+
+    def test_double_exponential_intensity_normalisation_is_finite(self, ylid: object) -> None:
+        refls = compute_structure_factors(
+            ylid,
+            sin_theta_over_lambda_max=0.6,
+            intensity_normalisation="double_exponential",
+            intensity_falloff="none",
+        )
+        assert np.all(np.isfinite(refls.intensities))
+        assert np.all(refls.intensities >= 0.0)
 
     def test_debye_waller_intensity_falloff_suppresses_high_resolution(self, ylid: object) -> None:
         refls_no_falloff = compute_structure_factors(

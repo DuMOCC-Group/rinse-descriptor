@@ -29,7 +29,7 @@ repos:
         stages: [pre-push]
       - id: pytest
         name: pytest (suite)
-        entry: sh -c 'PYTHONPATH=python uv run pytest tests/ -v --tb=short'
+        entry: uv run pytest tests/ -v --tb=short
         language: system
         pass_filenames: false
         stages: [pre-push]

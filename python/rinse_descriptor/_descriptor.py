@@ -92,7 +92,9 @@ class RinseParams:
         ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
     intensity_normalisation:
         Resolution-envelope normalisation for the input intensities.
-        ``"empirical"`` (default) estimates the mean intensity envelope in
+        ``"double_exponential"`` (default) fits a physically motivated
+        unbinned envelope ``A * exp(-b*s^2 - c*s^4)`` over all reflections,
+        where ``s = sin(θ)/λ``. ``"empirical"`` estimates the mean envelope in
         adaptive sin(θ)/λ bins, transforms amplitudes as
         ``F' = F / sqrt(envelope)``, and weights the descriptor with
         ``I' = |F'|²``. ``"none"`` leaves calculated intensities unchanged.
@@ -118,7 +120,9 @@ class RinseParams:
     include_odd_l: bool = False
     sin_theta_over_lambda_max: float = 0.6
     radial_basis: RadialBasisType = "smooth_shells_nl"
-    intensity_normalisation: IntensityNormalisation | Literal["none", "empirical"] = "empirical"
+    intensity_normalisation: (
+        IntensityNormalisation | Literal["none", "double_exponential", "empirical"]
+    ) = "double_exponential"
     intensity_normalisation_n_bins: int = 6
     intensity_normalisation_min_bin_size: int = 50
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller"
@@ -457,7 +461,7 @@ def normalise_power_spectrum(
 def power_spectrum_to_vector(P: NDArray[np.float64]) -> NDArray[np.float64]:
     """Flatten a (n_max, l_max) power spectrum matrix to a 1-D vector.
 
-    The layout is column-major: element index i*l_max + k corresponds to
-     radial order n=i and angular level ℓ=2k.
+    The layout is row-major: element index i*l_max + k corresponds to
+     radial order n=i and angular level ℓ=k.
     """
-    return P.T.ravel()
+    return P.ravel()

@@ -102,7 +102,7 @@ def _make_parser() -> argparse.ArgumentParser:
     norm.add_argument(
         "--intensity-normalisation",
         default=defaults.intensity_normalisation,
-        choices=["none", "empirical"],
+        choices=["none", "double_exponential", "empirical"],
         help=(
             "Normalise the resolution-dependent intensity envelope before descriptor accumulation."
         ),

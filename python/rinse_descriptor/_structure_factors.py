@@ -30,9 +30,12 @@ Structure factor types
 
 Intensity normalisation
 -----------------------
+* ``"double_exponential"`` — fit an unbinned physically motivated envelope
+    ``A * exp(-b*s^2 - c*s^4)`` to ``|F|²`` over all reflections, where
+    ``s = sin(θ)/λ`` (default)
 * ``"empirical"`` — estimate the resolution envelope of |F|² from adaptive
     bins in sin(θ)/λ, divide amplitudes by sqrt(envelope), then convert back to
-    the requested output type (default)
+    the requested output type
 * ``"none"``      — use calculated intensities as-is
 
 Intensity falloff
@@ -59,6 +62,7 @@ from cctbx import xray as _cctbx_xray  # noqa: F401
 # Eager import – must happen before pytest capture is active.
 from iotbx import cif as _iotbx_cif  # noqa: F401
 from numpy.typing import NDArray
+from scipy.optimize import least_squares
 
 # ---------------------------------------------------------------------------
 # Public enumerations
@@ -78,6 +82,7 @@ class StructureFactorType(StrEnum):
 
 class IntensityNormalisation(StrEnum):
     NONE = "none"
+    DOUBLE_EXPONENTIAL = "double_exponential"
     EMPIRICAL = "empirical"
 
 
@@ -147,7 +152,8 @@ def compute_structure_factors(
     sin_theta_over_lambda_max: float = 2.0,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
-    intensity_normalisation: IntensityNormalisation | Literal["none", "empirical"] = "empirical",
+    intensity_normalisation: IntensityNormalisation
+    | Literal["none", "double_exponential", "empirical"] = "double_exponential",
     intensity_normalisation_n_bins: int = 6,
     intensity_normalisation_min_bin_size: int = 50,
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller",
@@ -169,6 +175,9 @@ def compute_structure_factors(
         Output structure factor type. ``"F2"`` | ``"F"``.
     intensity_normalisation:
         Resolution-envelope normalisation to apply before output conversion.
+        ``"double_exponential"`` fits ``A * exp(-b*s^2 - c*s^4)`` to
+        ``|F|²`` using all reflections (no binning), applies
+        ``F' = F / sqrt(envelope)``, then returns either ``|F'|²`` or ``|F'|``.
         ``"empirical"`` estimates ⟨|F|²⟩ in adaptive sin(θ)/λ bins, applies
         ``F' = F / sqrt(envelope)``, then returns either ``|F'|²`` or ``|F'|``.
     intensity_normalisation_n_bins:
@@ -221,7 +230,10 @@ def compute_structure_factors(
     q_magnitudes = q_magnitudes[mask]
     F2 = F2[mask]
 
-    if intensity_norm == IntensityNormalisation.EMPIRICAL:
+    if intensity_norm == IntensityNormalisation.DOUBLE_EXPONENTIAL:
+        envelope = _double_exponential_intensity_envelope(q_magnitudes, F2)
+        F2 = F2 / envelope
+    elif intensity_norm == IntensityNormalisation.EMPIRICAL:
         envelope = _empirical_intensity_envelope(
             q_magnitudes,
             F2,
@@ -358,16 +370,96 @@ def _empirical_intensity_envelope(
             if np.any(center_diffs > 0.0)
             else 0.0,
             float((centers[-1] - centers[0]) / adaptive_n_bins),
-            np.finfo(np.float64).eps,
+            float(np.spacing(1.0)),
         )
-        distances = (s[:, None] - centers[None, :]) / bandwidth
-        weights = np.exp(-0.5 * distances * distances) * counts[None, :]
-        smoothed_log_means = (weights @ log_means) / np.maximum(
+
+        # Add one support point at each edge by linear extrapolation in log-space,
+        # then smooth against the augmented support with the Gaussian kernel.
+        left_dx = max(centers[1] - centers[0], float(np.spacing(1.0)))
+        right_dx = max(centers[-1] - centers[-2], float(np.spacing(1.0)))
+        left_slope = (log_means[1] - log_means[0]) / left_dx
+        right_slope = (log_means[-1] - log_means[-2]) / right_dx
+
+        support_centers = np.concatenate(
+            ([centers[0] - left_dx], centers, [centers[-1] + right_dx])
+        )
+        support_log_means = np.concatenate(
+            (
+                [log_means[0] - left_slope * left_dx],
+                log_means,
+                [log_means[-1] + right_slope * right_dx],
+            )
+        )
+        support_counts = np.concatenate(([counts[0]], counts, [counts[-1]]))
+
+        distances = (s[:, None] - support_centers[None, :]) / bandwidth
+        weights = np.exp(-0.5 * distances * distances) * support_counts[None, :]
+        smoothed_log_means = (weights @ support_log_means) / np.maximum(
             weights.sum(axis=1), np.finfo(np.float64).tiny
         )
         envelope = np.exp(smoothed_log_means)
 
     return np.maximum(envelope, floor)
+
+
+def _double_exponential_intensity_envelope(
+    q_magnitudes: NDArray[np.float64],
+    intensities: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Fit ``A * exp(-b*s^2 - c*s^4)`` to ``|F|²`` using all reflections.
+
+    The model combines two physically motivated decay factors over
+    ``s = sin(theta)/lambda``:
+
+    - atomic form-factor falloff (captured by ``exp(-b*s^2)``)
+    - Debye-Waller-like damping (captured by ``exp(-c*s^4)``)
+
+    Fitting is done with nonlinear least squares in a positive parameterisation:
+    ``A = exp(theta0)``, ``b = exp(theta1)``, ``c = exp(theta2)``.
+    Residuals are evaluated in log-space to balance low/high intensity ranges.
+    """
+    if q_magnitudes.shape != intensities.shape:
+        raise ValueError("q_magnitudes and intensities must have the same shape")
+
+    floor = np.finfo(np.float64).tiny
+    finite = np.isfinite(q_magnitudes) & np.isfinite(intensities) & (intensities > 0.0)
+    if int(finite.sum()) < 3:
+        return np.ones_like(intensities, dtype=np.float64)
+
+    s = 0.5 * q_magnitudes
+    s_fit = s[finite]
+    y_fit = np.maximum(intensities[finite], floor)
+    log_y_fit = np.log(y_fit)
+
+    # Build a stable initial guess from the linearised model.
+    s2 = s_fit * s_fit
+    s4 = s2 * s2
+    X = np.column_stack((np.ones_like(s2), s2, s4))
+    coeffs, *_ = np.linalg.lstsq(X, log_y_fit, rcond=None)
+
+    log_a0 = float(coeffs[0])
+    b0 = max(-float(coeffs[1]), float(np.spacing(1.0)))
+    c0 = max(-float(coeffs[2]), float(np.spacing(1.0)))
+    theta0 = np.array([log_a0, np.log(b0), np.log(c0)], dtype=np.float64)
+
+    def _residual(theta: NDArray[np.float64]) -> NDArray[np.float64]:
+        log_a, log_b, log_c = theta
+        b = np.exp(log_b)
+        c = np.exp(log_c)
+        return (log_a - b * s2 - c * s4) - log_y_fit  # type: ignore[no-any-return]
+
+    fit = least_squares(_residual, theta0, method="trf")
+    theta = fit.x if fit.success else theta0
+    log_a, log_b, log_c = map(float, theta)
+    b = np.exp(log_b)
+    c = np.exp(log_c)
+
+    all_s2 = s * s
+    all_s4 = all_s2 * all_s2
+    log_envelope = log_a - b * all_s2 - c * all_s4
+    envelope = np.exp(log_envelope)
+    clipped_envelope = np.maximum(envelope, floor).astype(np.float64, copy=False)
+    return clipped_envelope  # type: ignore[no-any-return]
 
 
 def _debye_waller_amplitude_window(
@@ -380,4 +472,5 @@ def _debye_waller_amplitude_window(
         raise ValueError(f"u_iso must be >= 0, got {u_iso}")
 
     s = 0.5 * q_magnitudes
-    return np.exp(-8.0 * np.pi**2 * u_iso * s * s)
+    window = np.exp(-8.0 * np.pi**2 * u_iso * s * s).astype(np.float64, copy=False)
+    return window
