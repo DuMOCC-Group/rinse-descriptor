@@ -370,7 +370,8 @@ def _(mo):
     This view compares three reflection-intensity envelopes for the uploaded structure:
 
     - raw calculated intensities, $|F|^2$
-    - empirically normalised intensities, where the fitted resolution envelope is divided out
+        - normalised intensities after the selected intensity normalisation mode
+            (`empirical` or `double_exponential`)
     - re-windowed intensities after applying the isotropic Debye-Waller factor
     """)
     return
@@ -382,6 +383,7 @@ def _(
     compute_structure_factors,
     crystal,
     ff_dd,
+    intensity_norm_dd,
     intensity_falloff_u_iso_slider,
     mo,
     np,
@@ -390,6 +392,10 @@ def _(
 ):
     if compute_error or crystal is None:
         mo.stop(True)
+
+    _norm_mode = intensity_norm_dd.value
+    if _norm_mode not in {"empirical", "double_exponential"}:
+        _norm_mode = "empirical"
 
     _raw_refls = compute_structure_factors(
         crystal,
@@ -404,7 +410,7 @@ def _(
         sin_theta_over_lambda_max=stol_slider.value,
         form_factor_type=ff_dd.value,
         structure_factor_type="F2",
-        intensity_normalisation="empirical",
+        intensity_normalisation=_norm_mode,
         intensity_falloff="none",
     )
     _windowed_refls = compute_structure_factors(
@@ -412,7 +418,7 @@ def _(
         sin_theta_over_lambda_max=stol_slider.value,
         form_factor_type=ff_dd.value,
         structure_factor_type="F2",
-        intensity_normalisation="empirical",
+        intensity_normalisation=_norm_mode,
         intensity_falloff="debye_waller",
         intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
     )
@@ -451,7 +457,7 @@ def _(
         "o-",
         lw=1.8,
         color="#2CA02C",
-        label="After empirical normalisation",
+        label=f"After {_norm_mode.replace('_', '-')} normalisation",
     )
     _ax1.plot(
         _centers,
@@ -464,7 +470,10 @@ def _(
     _ax1.set_yscale("log")
     _ax1.set_ylabel(r"Mean $|F|^2$", fontsize=10)
     _ax1.set_xlabel(r"$\sin\theta/\lambda$", fontsize=10)
-    _ax1.set_title("Intensity envelope before and after normalisation", fontsize=11)
+    _ax1.set_title(
+        f"Intensity envelope ({_norm_mode.replace('_', '-')}) before/after re-windowing",
+        fontsize=11,
+    )
     _ax1.legend(fontsize=8, loc="upper right")
     _ax1.grid(alpha=0.2)
 
