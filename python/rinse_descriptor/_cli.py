@@ -19,6 +19,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Literal, cast
 
 import numpy as np
 
@@ -201,7 +202,7 @@ def _get_version() -> str:
 def _compute_one(
     structure_path: str,
     params: object,
-    form_factor_type: str,
+    form_factor_type: Literal["xray", "electron", "neutron"],
     want_hash: bool,
     hash_words: int,
 ) -> tuple[object, str | None]:
@@ -257,7 +258,9 @@ def main(argv: list[str] | None = None) -> int:
             vec, h = _compute_one(
                 str(path),
                 params,
-                form_factor_type=args.form_factor_type,
+                form_factor_type=cast(
+                    Literal["xray", "electron", "neutron"], args.form_factor_type
+                ),
                 want_hash=args.hash,
                 hash_words=args.hash_words,
             )
