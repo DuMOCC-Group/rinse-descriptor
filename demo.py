@@ -184,7 +184,7 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         label="Form factor type",
     )
     intensity_norm_dd = mo.ui.dropdown(
-        options=["none", "empirical"],
+        options=["none", "empirical", "double_exponential"],
         value=_defaults["intensity_normalisation"],
         label="Intensity normalisation",
     )
