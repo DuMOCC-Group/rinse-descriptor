@@ -84,3 +84,5 @@ csd_descriptors*
 csd_hashes*
 convergence_history.csv
 pca_components_prefix*
+cod_descriptors.pkl
+cod_hashes.csv
