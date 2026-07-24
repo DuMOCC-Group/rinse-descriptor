@@ -16,19 +16,21 @@ Usage:
 
 import argparse
 import csv
+import os
 import pickle
 import sys
+import tempfile
 import time
 from io import StringIO
 from pathlib import Path
 
-from ccdc.io import EntryReader
+from ccdc.io import CrystalWriter, EntryReader
 from rinse_descriptor import (
     RinseParams,
     compute_power_spectrum,
     compute_structure_factors,
     descriptor_hash,
-    load_cif,
+    load_res,
     power_spectrum_to_vector,
 )
 
@@ -37,8 +39,8 @@ def _print_timings(t_acc: dict, n: int) -> None:
     total = sum(t_acc.values())
     print(
         f"  avg timings over {n} structures (ms):  "
-        f"cif_string={t_acc['cif_string'] / n * 1e3:.1f}  "
-        f"load_cif={t_acc['load_cif'] / n * 1e3:.1f}  "
+        f"res_string={t_acc['res_string'] / n * 1e3:.1f}  "
+        f"load_res={t_acc['load_res'] / n * 1e3:.1f}  "
         f"struct_factors={t_acc['struct_factors'] / n * 1e3:.1f}  "
         f"power_spectrum={t_acc['power_spectrum'] / n * 1e3:.1f}  "
         f"hash={t_acc['hash'] / n * 1e3:.1f}  "
@@ -47,14 +49,33 @@ def _print_timings(t_acc: dict, n: int) -> None:
     )
 
 
+def _entry_to_res_string(entry: object) -> str:
+    """Convert a CSD entry to SHELX RES text using the CSD writer API."""
+    fd, tmp_name = tempfile.mkstemp(suffix=".res")
+    os.close(fd)
+    Path(tmp_name).unlink(missing_ok=True)
+
+    try:
+        with CrystalWriter(tmp_name, format="res") as writer:
+            writer.write(entry.crystal)
+
+        res_string = Path(tmp_name).read_text(encoding="utf-8", errors="replace")
+        if not res_string.rstrip().endswith("END"):
+            res_string = f"{res_string.rstrip()}\nEND\n"
+        return res_string
+    finally:
+        Path(tmp_name).unlink(missing_ok=True)
+
+
 def _process_single(refcode: str) -> None:
     """Compute and print the descriptor hash for one CSD refcode."""
     reader = EntryReader("CSD")
     entry = reader.entry(refcode)
-    cif_string = entry.to_string(format="cif")
     params = RinseParams()
     t0 = time.perf_counter()
-    xrs = load_cif(StringIO(cif_string))
+    res_string = _entry_to_res_string(entry)
+    t_res = time.perf_counter()
+    xrs = load_res(StringIO(res_string))
     t_load = time.perf_counter()
     reflections = compute_structure_factors(
         xrs,
@@ -68,7 +89,8 @@ def _process_single(refcode: str) -> None:
     t_hash = time.perf_counter()
     print(f"{refcode}\t{hash_str}")
     print(
-        f"  load_cif={(t_load - t0) * 1e3:.1f}ms  "
+        f"  res_string={(t_res - t0) * 1e3:.1f}ms  "
+        f"load_res={(t_load - t_res) * 1e3:.1f}ms  "
         f"struct_factors={(t_sf - t_load) * 1e3:.1f}ms  "
         f"power_spectrum={(t_ps - t_sf) * 1e3:.1f}ms  "
         f"hash={(t_hash - t_ps) * 1e3:.1f}ms  "
@@ -168,8 +190,8 @@ def main():
         # Per-step timing accumulators (seconds)
         params = RinseParams()
         t_acc = {
-            "cif_string": 0.0,
-            "load_cif": 0.0,
+            "res_string": 0.0,
+            "load_res": 0.0,
             "struct_factors": 0.0,
             "power_spectrum": 0.0,
             "hash": 0.0,
@@ -208,18 +230,18 @@ def main():
                 continue
 
             try:
-                # Get CIF string
+                # Build RES string from CSD entry
                 _t = time.perf_counter()
-                cif_string = entry.to_string(format="cif")
-                t_acc["cif_string"] += time.perf_counter() - _t
+                res_string = _entry_to_res_string(entry)
+                t_acc["res_string"] += time.perf_counter() - _t
 
-                # Create xray.structure from CIF string
+                # Create xray.structure from RES string
                 _t = time.perf_counter()
                 try:
-                    xrs = load_cif(StringIO(cif_string))
+                    xrs = load_res(StringIO(res_string))
                 except Exception:
                     continue
-                t_acc["load_cif"] += time.perf_counter() - _t
+                t_acc["load_res"] += time.perf_counter() - _t
 
                 n_atoms = xrs.scatterers().size()
                 if n_atoms == 0:
