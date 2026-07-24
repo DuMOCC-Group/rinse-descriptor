@@ -132,14 +132,15 @@ from rinse_descriptor import descriptor
 # Electron scattering factors; descriptor weights are still intensities I = |F|²
 x = descriptor("mystructure.cif", form_factor_type="electron")
 
-# Empirical envelope removal and Debye-Waller falloff are on by default.
+# Double-exponential envelope removal and Debye-Waller falloff are on by default.
 # Set intensity_normalisation="none" and/or intensity_falloff="none" to opt out.
 x_norm = descriptor("mystructure.cif")
 ```
 
 Available `form_factor_type` values: `"xray"` (default), `"electron"`, `"neutron"`.
 
-Available `intensity_normalisation` values: `"empirical"` (default), `"none"`.
+Available `intensity_normalisation` values:
+`"double_exponential"` (default), `"empirical"`, `"none"`.
 
 Available `intensity_falloff` values: `"debye_waller"` (default), `"none"`.
 For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic

@@ -8,7 +8,7 @@ Quick start
 >>> x.shape == (RinseParams().descriptor_length,)
 True
 
-Alternatively pass a CIF path directly::
+Alternatively pass a structure path directly::
 
     >>> x = descriptor("nacl.cif")
 
@@ -29,7 +29,7 @@ from ._cctbx_import_patch import patch_cctbx_imports
 
 patch_cctbx_imports()
 
-from ._crystal import load_cif  # noqa: E402
+from ._crystal import load_cif, load_res, load_structure  # noqa: E402
 from ._descriptor import (  # noqa: E402
     RinseParams,
     compute_power_spectrum,
@@ -49,6 +49,8 @@ from ._structure_factors import (  # noqa: E402
 __version__ = "0.1.0"
 __all__ = [
     "load_cif",
+    "load_res",
+    "load_structure",
     "RinseParams",
     "FormFactorType",
     "IntensityFalloff",
@@ -79,8 +81,8 @@ def descriptor(
     Parameters
     ----------
     atoms:
-        A :class:`cctbx.xray.structure` or a path to a CIF file
-        (``str`` / :class:`pathlib.Path`).
+        A :class:`cctbx.xray.structure` or a path to a supported structure file
+        (``.cif``, ``.res``, ``.ins``).
     params:
         Descriptor hyper-parameters.  Uses :class:`RinseParams` defaults if *None*.
         ``params.log1p`` and ``params.l2`` control post-processing normalisation.
@@ -110,7 +112,7 @@ def descriptor(
 
     if debug:
         if isinstance(atoms, (str, pathlib.Path)):
-            print(f"[rinse_descriptor] input: CIF {atoms}", file=sys.stderr)
+            print(f"[rinse_descriptor] input: file {atoms}", file=sys.stderr)
         else:
             print(f"[rinse_descriptor] input: {type(atoms).__name__}", file=sys.stderr)
 
@@ -178,7 +180,8 @@ def descriptor_many(
     Parameters
     ----------
     structures:
-        Iterable of :class:`cctbx.xray.structure` objects or CIF paths.
+        Iterable of :class:`cctbx.xray.structure` objects or supported
+        structure-file paths (``.cif``, ``.res``, ``.ins``).
     params:
         Shared descriptor hyper-parameters.
     form_factor_type:
@@ -211,12 +214,14 @@ def descriptor_many(
 
 
 def _to_xrs(atoms: object) -> Any:
-    """Accept a cctbx xray.structure, str (CIF path), or pathlib.Path."""
+    """Accept a cctbx xray.structure, str path, or pathlib.Path."""
     import pathlib
 
     if isinstance(atoms, (str, pathlib.Path)):
-        return load_cif(atoms)
+        return load_structure(atoms)
     # Accept any cctbx xray.structure (duck-typing; avoids a hard import of the C type)
     if hasattr(atoms, "structure_factors") and hasattr(atoms, "scatterers"):
         return atoms
-    raise TypeError(f"Expected a cctbx xray.structure or a CIF file path, got {type(atoms)}")
+    raise TypeError(
+        f"Expected a cctbx xray.structure or a supported structure-file path, got {type(atoms)}"
+    )

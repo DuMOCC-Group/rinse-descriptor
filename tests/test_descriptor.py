@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from rinse_descriptor import RinseParams, descriptor, descriptor_many, load_cif
+from rinse_descriptor import RinseParams, descriptor, descriptor_many, load_cif, load_res
 from rinse_descriptor._descriptor import compute_power_spectrum
 from rinse_descriptor._structure_factors import ReflectionList, compute_structure_factors
 
@@ -101,6 +101,22 @@ class TestDescriptorShape:
         x = descriptor(str(FIXTURES_DIR / "nacl.cif"))
         assert x.ndim == 1
         assert x.shape[0] == RinseParams().descriptor_length
+
+    def test_descriptor_accepts_res_path(self) -> None:
+        x = descriptor(FIXTURES_DIR / "nacl.res")
+        assert x.ndim == 1
+        assert x.shape[0] == RinseParams().descriptor_length
+
+    def test_descriptor_accepts_res_string(self) -> None:
+        x = descriptor(str(FIXTURES_DIR / "nacl.res"))
+        assert x.ndim == 1
+        assert x.shape[0] == RinseParams().descriptor_length
+
+
+class TestLoaders:
+    def test_load_res_has_atoms(self) -> None:
+        xrs = load_res(FIXTURES_DIR / "nacl.res")
+        assert xrs.scatterers().size() > 0
 
 
 # ---------------------------------------------------------------------------

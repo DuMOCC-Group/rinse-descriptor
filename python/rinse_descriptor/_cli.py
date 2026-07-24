@@ -3,13 +3,14 @@
 Usage examples
 --------------
     rinse nacl.cif
+    rinse nacl.res
     rinse nacl.cif --n-max 12 --l-max 48 --l-min 0
     rinse nacl.cif --log1p --no-l2
     rinse nacl.cif --hash
     rinse nacl.cif --hash --hash-words 8
     rinse nacl.cif --output-format json
-    rinse file1.cif file2.cif --hash
-    rinse file1.cif file2.cif --no-flatten --output-format json
+    rinse file1.cif file2.res --hash
+    rinse file1.cif file2.res --no-flatten --output-format json
 """
 
 from __future__ import annotations
@@ -30,16 +31,16 @@ def _make_parser() -> argparse.ArgumentParser:
 
     p = argparse.ArgumentParser(
         prog="rinse",
-        description="Compute the RINSE descriptor for one or more CIF files.",
+        description="Compute the RINSE descriptor for one or more structure files.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     # Positional
     p.add_argument(
-        "cif",
+        "input_files",
         nargs="+",
-        metavar="CIF",
-        help="Path(s) to input CIF file(s).",
+        metavar="INPUT",
+        help="Path(s) to input structure file(s): .cif, .res, .ins.",
     )
 
     # --- RinseParams ---
@@ -176,7 +177,7 @@ def _make_parser() -> argparse.ArgumentParser:
         dest="output_format",
         help=(
             "Output format. 'text' prints whitespace-separated values, "
-            "'json' emits a JSON object, 'npy' writes .npy files alongside each CIF."
+            "'json' emits a JSON object, 'npy' writes .npy files alongside each input."
         ),
     )
     p.add_argument(
@@ -198,26 +199,20 @@ def _get_version() -> str:
 
 
 def _compute_one(
-    cif_path: str,
+    structure_path: str,
     params: object,
     form_factor_type: str,
     want_hash: bool,
     hash_words: int,
 ) -> tuple[object, str | None]:
     """Return (array, hash_str|None).  Raises on error."""
-    from typing import Literal, cast
-
     from . import RinseParams, descriptor, descriptor_hash
-    from ._structure_factors import FormFactorType
 
     assert isinstance(params, RinseParams)
     vec = descriptor(
-        cif_path,
+        structure_path,
         params=params,
-        form_factor_type=cast(
-            "Literal['xray','electron','neutron'] | FormFactorType",
-            form_factor_type,
-        ),
+        form_factor_type=form_factor_type,
     )
     h = descriptor_hash(vec.ravel(), n_words=hash_words) if want_hash else None
     return vec, h
@@ -253,10 +248,10 @@ def main(argv: list[str] | None = None) -> int:
     results: list[dict[str, object]] = []
     errors: list[str] = []
 
-    for cif in args.cif:
-        path = Path(cif)
+    for input_file in args.input_files:
+        path = Path(input_file)
         if not path.exists():
-            errors.append(f"{cif}: file not found")
+            errors.append(f"{input_file}: file not found")
             continue
         try:
             vec, h = _compute_one(
@@ -267,10 +262,10 @@ def main(argv: list[str] | None = None) -> int:
                 hash_words=args.hash_words,
             )
         except Exception as exc:  # noqa: BLE001
-            errors.append(f"{cif}: {exc}")
+            errors.append(f"{input_file}: {exc}")
             continue
 
-        results.append({"file": cif, "vector": vec, "hash": h})
+        results.append({"file": input_file, "vector": vec, "hash": h})
 
     if args.output_format == "json":
         out: list[dict[str, object]] = []

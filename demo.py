@@ -41,7 +41,7 @@ def _():
         RinseParams,
         descriptor,
         descriptor_hash,
-        load_cif,
+        load_structure,
     )
     from rinse_descriptor._descriptor import compute_power_spectrum, power_spectrum_to_vector
     from rinse_descriptor._structure_factors import compute_structure_factors
@@ -59,7 +59,7 @@ def _():
         compute_structure_factors,
         dataclasses,
         descriptor,
-        load_cif,
+        load_structure,
         np,
         plt,
         power_spectrum_to_vector,
@@ -84,7 +84,7 @@ def _(mo):
     envelope, then an isotropic Debye-Waller falloff softly damps high-resolution
     reflections before the power spectrum is accumulated.
 
-    Upload a CIF file, then adjust
+    Upload a structure file, then adjust
     the parameters below.
     """)
     return
@@ -261,8 +261,8 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     cif_upload = mo.ui.file(
-        filetypes=[".cif"],
-        label="Upload CIF file",
+        filetypes=[".cif", ".res", ".ins"],
+        label="Upload structure file (.cif, .res, .ins)",
     )
     cif_upload
     return (cif_upload,)
@@ -283,7 +283,7 @@ def _(
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
-    load_cif,
+    load_structure,
     log1p_compression_cb,
     n_max_slider,
     power_spectrum_to_vector,
@@ -291,6 +291,7 @@ def _(
 ):
     import os
     import tempfile
+    from pathlib import Path
 
     _crystal = None
     _struct_label = ""
@@ -299,11 +300,12 @@ def _(
     try:
         if cif_upload.value:
             _f = cif_upload.value[0]
-            with tempfile.NamedTemporaryFile(suffix=".cif", delete=False) as _tmp:
+            _suffix = Path(_f.name).suffix.lower() or ".cif"
+            with tempfile.NamedTemporaryFile(suffix=_suffix, delete=False) as _tmp:
                 _tmp.write(_f.contents)
                 _tmp_path = _tmp.name
             try:
-                _crystal = load_cif(_tmp_path)
+                _crystal = load_structure(_tmp_path)
                 _struct_label = _f.name
             finally:
                 os.unlink(_tmp_path)
@@ -370,9 +372,6 @@ def _(mo):
     - raw calculated intensities, $|F|^2$
     - empirically normalised intensities, where the fitted resolution envelope is divided out
     - re-windowed intensities after applying the isotropic Debye-Waller factor
-
-    The lower panel checks that the re-windowing step matches the expected
-    intensity attenuation $\exp(-16\pi^2 U_{iso} s^2)$, where $s = \sin(\theta)/\lambda$.
     """)
     return
 
@@ -464,7 +463,8 @@ def _(
     )
     _ax1.set_yscale("log")
     _ax1.set_ylabel(r"Mean $|F|^2$", fontsize=10)
-    _ax1.set_title("Resolution envelope before and after normalisation", fontsize=11)
+    _ax1.set_xlabel(r"$\sin\theta/\lambda$", fontsize=10)
+    _ax1.set_title("Intensity envelope before and after normalisation", fontsize=11)
     _ax1.legend(fontsize=8, loc="upper right")
     _ax1.grid(alpha=0.2)
 
@@ -478,7 +478,7 @@ def _(P, compute_error, mo, params, plt):
     if compute_error or P is None:
         mo.stop(True)
 
-    _fig, _axes = plt.subplots(2, 1, figsize=(12, 6))
+    _fig, _axes = plt.subplots(1, 2, figsize=(12, 5))
     _fig.suptitle("RINSE Descriptor", fontsize=13, fontweight="bold")
 
     # Panel 1 – heatmap
@@ -602,7 +602,7 @@ def _(basis_dd, n_max_slider, np, plt, stol_slider):
     _cmap_rb = plt.get_cmap("turbo")
     _colors = [_cmap_rb(i / max(_n_max - 1, 1)) for i in range(_n_max)]
 
-    _fig_rb, _ax_rb = plt.subplots(figsize=(11, 3.5))
+    _fig_rb, _ax_rb = plt.subplots(figsize=(6, 2))
     for _n in range(_n_max):
         _ax_rb.plot(
             _q,
@@ -622,7 +622,7 @@ def _(basis_dd, n_max_slider, np, plt, stol_slider):
         fontsize=11,
     )
     if _n_max <= 8:
-        _ax_rb.legend(fontsize=8, ncol=2, loc="upper right")
+        _ax_rb.legend(fontsize=8, ncol=2, loc="upper left")
     else:
         # Colour-bar stand-in: annotate a few curve indices
         for _n in [0, _n_max // 4, _n_max // 2, 3 * _n_max // 4, _n_max - 1]:
@@ -1049,8 +1049,8 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     cif_upload2 = mo.ui.file(
-        filetypes=[".cif"],
-        label="Upload second CIF file",
+        filetypes=[".cif", ".res", ".ins"],
+        label="Upload second structure file (.cif, .res, .ins)",
     )
     cif_upload2
     return (cif_upload2,)
@@ -1071,7 +1071,7 @@ def _(
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
-    load_cif,
+    load_structure,
     log1p_compression_cb,
     n_max_slider,
     os,
@@ -1086,11 +1086,12 @@ def _(
     try:
         if cif_upload2.value:
             _f = cif_upload2.value[0]
-            with tempfile.NamedTemporaryFile(suffix=".cif", delete=False) as _tmp:
+            _suffix = os.path.splitext(_f.name)[1].lower() or ".cif"
+            with tempfile.NamedTemporaryFile(suffix=_suffix, delete=False) as _tmp:
                 _tmp.write(_f.contents)
                 _tmp_path = _tmp.name
             try:
-                _crystal = load_cif(_tmp_path)
+                _crystal = load_structure(_tmp_path)
                 _struct_label = _f.name
             finally:
                 os.unlink(_tmp_path)
