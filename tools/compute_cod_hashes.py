@@ -37,6 +37,17 @@ from rinse_descriptor import (
     power_spectrum_to_vector,
 )
 
+_RECOVERABLE_INPUT_ERRORS = (
+    Sorry,
+    ValueError,
+    RuntimeError,
+    OSError,
+    NameError,
+    AttributeError,
+    KeyError,
+    Exception,
+)
+
 
 def _print_timings(t_acc: dict, n: int) -> None:
     total = t_acc["total"]
@@ -101,7 +112,7 @@ def _process_single(cod_id: str, zip_path: Path) -> None:
     t0 = time.perf_counter()
     try:
         xrs = load_cif(StringIO(cif_string))
-    except (Sorry, ValueError, RuntimeError, OSError, NameError) as exc:
+    except _RECOVERABLE_INPUT_ERRORS as exc:
         print(f"Error processing {cod_id}: {exc}", file=sys.stderr)
         sys.exit(1)
     t_load = time.perf_counter()
@@ -291,7 +302,7 @@ def main():
                     _t = time.perf_counter()
                     try:
                         xrs = load_cif(StringIO(cif_string))
-                    except (Sorry, ValueError, RuntimeError, OSError, NameError):
+                    except _RECOVERABLE_INPUT_ERRORS:
                         continue
                     t_acc["load_cif"] += time.perf_counter() - _t
 
@@ -335,7 +346,7 @@ def main():
                         with open(pickle_file, "wb") as f:
                             pickle.dump((refcodes, descriptors), f)
 
-                except (Sorry, ValueError, RuntimeError, OSError, NameError) as e:
+                except _RECOVERABLE_INPUT_ERRORS as e:
                     errors += 1
                     print(f"Error processing {refcode}: {e}", file=sys.stderr)
                 finally:
