@@ -86,3 +86,6 @@ convergence_history.csv
 pca_components_prefix*
 cod_descriptors.pkl
 cod_hashes.csv
+mp_hashes.csv
+.gitignore
+mp_descriptors.pkl
