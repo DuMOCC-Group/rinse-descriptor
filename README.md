@@ -7,12 +7,12 @@ and angular basis (analogous to SOAP, but working entirely in reciprocal space).
 ## Descriptor formulation
 
 For a crystal, all reflections $\mathbf{G}_{\mathrm{hkl}}$ within a resolution cutoff
-(default $\sin{\theta}/\lambda \leq 0.6 Å^{-1}$, i.e. $|\mathbf{G}| \leq 1.2 Å^{-1}$) are enumerated.
+(default $\sin{\theta}/\lambda \leq 0.5 Å^{-1}$, i.e. $|\mathbf{G}| \leq 1.0 Å^{-1}$) are enumerated.
 Each reflection is assigned an intensity $\mathrm{I}(\mathbf{G}) = \lvert\mathrm{F}(\mathbf{G})\rvert^{2}$ from the
 structure factor calculated via cctbx direct summation with 
 X-ray form factors by default. Isotropic and anisotropic displacement parameters are read from
 the CIF by default; double-exponential reciprocal-space intensity normalisation then
-removes the mean resolution dependence, followed by an isotropic Debye-Waller (Uiso = 0.05)
+removes the mean resolution dependence, followed by an isotropic Debye-Waller (Uiso = 0.07)
 falloff that softly damps high-resolution reflections.
 
 The expansion coefficients are:
@@ -29,11 +29,11 @@ $$
 
 Because the intensity field is centrosymmetric if anomalous dispersion is not considered, only even *l*
 contributes. By default, RINSE also drops the monopole (*l* = 0) and quadrupole
-(*l* = 2) terms. Default parameters give a **16 × 8 = 128-element** descriptor:
+(*l* = 2) terms. Default parameters give an **8 × 8 = 64-element** descriptor:
 
 | Axis | Values | Count |
 |------|--------|-------|
-| Radial (*n*) | 0, 1, …, 15 | 16 |
+| Radial (*n*) | 0, 1, …, 7 | 8 |
 | Angular (*l*) | 4, 6, 8, …, 18 (even only) | 8 |
 
 ## Installation
@@ -85,17 +85,17 @@ from rinse_descriptor import RinseParams, descriptor, descriptor_many
 
 # Single structure → 1-D feature vector
 x = descriptor("mystructure.cif")
-print(x.shape)  # (128,)
+print(x.shape)  # (64,)
 
 # Return the 2-D power-spectrum matrix instead
 params = RinseParams(flatten=False)
 x_mat = descriptor("mystructure.cif", params=params)
-print(x_mat.shape)  # (16, 8)
+print(x_mat.shape)  # (8, 8)
 
-# Batch of structures → (N, 128)
+# Batch of structures → (N, 64)
 structures = ["structure_1.cif", "structure_2.cif"]
 X = descriptor_many(structures)
-print(X.shape)  # (2, 128)
+print(X.shape)  # (2, 64)
 ```
 
 ### From a loaded cctbx structure
@@ -105,7 +105,7 @@ from rinse_descriptor import descriptor, load_cif
 
 xrs = load_cif("mystructure.cif")
 x = descriptor(xrs)
-print(x.shape)  # (128,)
+print(x.shape)  # (64,)
 ```
 
 ### Custom parameters
@@ -145,7 +145,7 @@ Available `intensity_normalisation` values:
 Available `intensity_falloff` values: `"debye_waller"` (default), `"none"`.
 For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic
 displacement parameter used in the amplitude factor
-$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.05` Å².
+$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.07` Å².
 
 ## Locality-sensitive hashing
 

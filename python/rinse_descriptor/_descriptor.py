@@ -18,9 +18,9 @@ contributions from odd-l harmonics cancel exactly.  Only even l contribute:
     l ∈ {0, 2, 4, …, 2*(L-1)}  for L angular levels.
 
 Default parameters:
-    n_max = 16  → radial indices 0 … 15
+    n_max = 8  → radial indices 0 … 7
     l_min = 4, l_max = 20  → angular levels: l ∈ {4, 6, …, 18}  (8 levels)
-    Output: (16, 8) matrix  → flattened to 128-element vector
+    Output: (8, 8) matrix  → flattened to 64-element vector
             axis-0 = radial index n
             axis-1 = angular level index
 
@@ -57,7 +57,7 @@ class RinseParams:
     Attributes
     ----------
     n_max:
-        Number of radial basis functions (n = 0 … n_max-1).  Default 16.
+        Number of radial basis functions (n = 0 … n_max-1).  Default 8.
     l_max:
         Maximum ℓ value (exclusive).  Default 20.
         When ``include_odd_l=False`` (default), angular levels are the even
@@ -86,7 +86,7 @@ class RinseParams:
         flat 1-D vector of length ``n_max * n_l_levels``.  If *False*, returns
         the 2-D ``(n_max, n_l_levels)`` matrix.
     sin_theta_over_lambda_max:
-        Resolution cutoff.  Default 0.6 Å⁻¹ → |G| ≤ 1.2 Å⁻¹.
+        Resolution cutoff.  Default 0.5 Å⁻¹ → |G| ≤ 1.0 Å⁻¹.
     radial_basis:
         ``"chebyshev"`` , ``"bessel"`` or
         ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
@@ -108,17 +108,18 @@ class RinseParams:
         ``"none"`` disables falloff.
     intensity_falloff_u_iso:
         Average isotropic displacement parameter in Å² for Debye-Waller falloff.
+        Default 0.07.
     use_reported_adps:
         If *True* (default), use displacement parameters as reported in the CIF
         (isotropic or anisotropic). If *False*, all atoms are assigned isotropic
         thermal motion with U_iso = 0.05 Å².
     """
 
-    n_max: int = 16
+    n_max: int = 8
     l_max: int = 20
     l_min: int = 4
     include_odd_l: bool = False
-    sin_theta_over_lambda_max: float = 0.6
+    sin_theta_over_lambda_max: float = 0.5
     radial_basis: RadialBasisType = "smooth_shells_nl"
     intensity_normalisation: (
         IntensityNormalisation | Literal["none", "double_exponential", "empirical"]
@@ -126,7 +127,7 @@ class RinseParams:
     intensity_normalisation_n_bins: int | None = None
     intensity_normalisation_min_bin_size: int | None = None
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller"
-    intensity_falloff_u_iso: float = 0.05
+    intensity_falloff_u_iso: float = 0.07
     use_reported_adps: bool = True
     log1p: bool = False
     l2: bool = True

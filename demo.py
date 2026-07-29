@@ -75,7 +75,7 @@ def _(mo):
     **Reciprocal-space INvariant Spectral Embedding*
 
     Computes the intensity-weighted reciprocal-space power spectrum for any
-    crystal structure. The descriptor is by default a **16 × 8 matrix** (128 elements)
+    crystal structure. The descriptor is by default an **8 × 8 matrix** (64 elements)
     indexed by radial order *n* and even angular
     level *ℓ* ∈ {4, 6, 8, …, 18}.
 
@@ -127,7 +127,7 @@ def _(mo):
 
     Intensity falloff applies an amplitude window after normalisation. The
     default Debye-Waller falloff multiplies amplitudes by exp(-8π² U_iso s²),
-    where s = sin(theta)/lambda and U_iso defaults to 0.05 Å².
+    where s = sin(theta)/lambda and U_iso defaults to 0.07 Å².
 
     log1p compression reduces the dynamic range of the descriptor.
     This is generally required when monopoles are included.
@@ -383,8 +383,8 @@ def _(
     compute_structure_factors,
     crystal,
     ff_dd,
-    intensity_norm_dd,
     intensity_falloff_u_iso_slider,
+    intensity_norm_dd,
     mo,
     np,
     plt,
@@ -469,7 +469,7 @@ def _(
     )
     _ax1.set_yscale("log")
     _ax1.set_ylabel(r"Mean $|F|^2$", fontsize=10)
-    _ax1.set_xlabel(r"$\sin\theta/\lambda$", fontsize=10)
+    _ax1.set_xlabel(r"$\sin\theta/\lambda$ / $\mathrm{\AA}^{-1}$", fontsize=10)
     _ax1.set_title(
         f"Intensity envelope ({_norm_mode.replace('_', '-')}) before/after re-windowing",
         fontsize=11,
