@@ -8,16 +8,24 @@ This directory contains scripts for computing and updating the PCA-based hash mo
 
 Computes RINSE descriptor hashes for all structures in the Cambridge Structural Database (CSD).
 
+Descriptor computation is parallelised across worker processes (`--jobs`, default: all CPUs). CSD access (entry iteration and SHELX RES export) runs serially in the main process while the crystallography runs in the pool. Hashes are **2 proquint words by default** (`--n-words`). Every 100 new structures a per-position letter histogram is printed to stderr as a quick uniformity check.
+
 **Outputs:**
 - `csd_hashes.csv`: CSV file with refcode and hash columns (or `csd_hashes_chunk_N.csv` for chunks)
 - `csd_descriptors.pkl`: Pickle file with refcodes and high-dimensional descriptors (or `csd_descriptors_chunk_N.pkl`)
 
 **Usage:**
 ```bash
-# Process all structures sequentially
+# Process all structures using all CPUs
 python compute_csd_hashes.py
 
-# Parallel processing: split into 10 chunks, process chunk 0
+# Limit the number of worker processes
+python compute_csd_hashes.py --jobs 8
+
+# One-word hashes instead of the default two
+python compute_csd_hashes.py --n-words 1
+
+# Distribute across machines: split into 10 chunks, process chunk 0
 python compute_csd_hashes.py 10 0
 
 # Process chunk 5 of 10
@@ -28,11 +36,41 @@ python compute_csd_hashes.py 10 5
 - Requires access to the CSD via the `ccdc` Python API
 - The script supports resumption: if interrupted, it will skip already-processed structures
 - Descriptors are saved incrementally every 100 structures
-- Chunking distributes entries by index: chunk N processes entries where `index % num_chunks == N`
+- `--jobs` parallelises the compute within one run; index chunking (`num_chunks chunk_id`) distributes work across separate processes/machines (chunk N processes entries where `index % num_chunks == N`)
+
+### `compute_descriptors.py`
+
+Computes RINSE descriptors for every structure in a training-set pickle produced by `build_training_set.py` and writes them back into the same pickle under a `descriptor` key.
+
+**Inputs:**
+- A training-set pickle (list of record dicts, each with a `text` structure string and a `format` of `"cif"` or `"res"`).
+
+**Outputs:**
+- The input pickle, updated in place: each record gains a `descriptor` field (a float64 vector, or `None` with a `descriptor_error` message on failure).
+
+**Usage:**
+```bash
+# Compute descriptors for the training split
+uv run tools/compute_descriptors.py --input training_set_full.pkl
+
+# Checkpoint more frequently
+uv run tools/compute_descriptors.py --input training_set_full.pkl --checkpoint-every 200
+
+# Re-attempt records that failed on a previous run
+uv run tools/compute_descriptors.py --input training_set_full.pkl --retry-failed
+```
+
+**Notes:**
+- Resumable: records that already carry a `descriptor` key are skipped, so re-running the same command continues where it left off.
+- Progress (processed/total, percent, rate, elapsed, ETA) is printed as a live-updating line on stderr.
+- The pickle is checkpointed to disk atomically every `--checkpoint-every` new descriptors and on Ctrl-C.
 
 ### `compute_pca.py`
 
-Performs PCA on the collected descriptors and saves the principal components to the package data directory.
+**Inputs:**
+Accepts either pickle layout:
+- a training-set pickle from `build_training_set.py` populated by `compute_descriptors.py` (a list of record dicts each with a `descriptor` field; records without a descriptor are skipped)
+- the legacy `(refcodes, descriptors)` two-tuple from `compute_csd_hashes.py`
 
 **Outputs:**
 - `../python/rinse_descriptor/data/pca_components.json`: PCA model for distribution
@@ -46,7 +84,7 @@ python compute_pca.py
 python compute_pca.py --n-components 50
 
 # Custom input/output paths
-python compute_pca.py --input custom_descriptors.pkl --output custom_output.json
+python compute_pca.py --input training_set_full.pkl --output custom_output.json
 ```
 
 **Output format:**
@@ -110,6 +148,32 @@ Merges chunk files produced by parallel runs of `compute_csd_hashes.py`.
 **Outputs:**
 - `csd_descriptors.pkl`: Merged descriptors from all chunks
 - `csd_hashes.csv`: Merged hashes from all chunks
+
+### `compute_mp_hashes.py`
+
+Computes RINSE descriptor hashes for structures from the Materials Project API.
+
+**Outputs:**
+- `mp_hashes.csv` (or `mp_hashes_chunk_N.csv` for chunks): CSV with `material_id,hash`
+- `mp_descriptors.pkl` (or `mp_descriptors_chunk_N.pkl`): Pickle with material ids and descriptors
+
+**Usage:**
+```bash
+# Set API key in environment (recommended)
+$env:MP_API_KEY="<your-key>"
+uv run tools/compute_mp_hashes.py
+
+# Parallel processing chunk 0 of 10
+uv run tools/compute_mp_hashes.py 10 0
+
+# Single material id
+uv run tools/compute_mp_hashes.py --material-id mp-149
+```
+
+**Notes:**
+- Requires `mp-api` and `pymatgen`
+- Supports resumption from existing `mp_descriptors*.pkl`
+- Avoid hardcoding API keys in scripts
 
 ### `submit_parallel.sh`
 

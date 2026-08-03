@@ -1,14 +1,20 @@
 """Compute RINSE descriptor hashes for all structures in the CSD.
 
-Supports chunking for parallel processing on HPC clusters.
+Descriptor computation is parallelised across worker processes (``--jobs``);
+CSD access (entry iteration and SHELX RES export) runs serially in the main
+process while the heavy crystallography runs in the pool.  The script also
+supports index-based chunking for distributing work across separate machines.
+
+Every 100 new structures a per-position letter histogram is printed to stderr
+as a quick visual check that the hash characters are uniformly distributed.
 
 Outputs:
     - csd_hashes_chunk_N.csv: CSV file with refcode and hash columns
     - csd_descriptors_chunk_N.pkl: Pickle file with refcodes and high-dimensional descriptors
-    - stdout: Tab-separated refcode and hash for each structure
 
 Usage:
-    python compute_csd_hashes.py                    # Process all structures
+    python compute_csd_hashes.py                    # All structures, all CPUs
+    python compute_csd_hashes.py --jobs 8           # Limit worker processes
     python compute_csd_hashes.py 10 0               # Process chunk 0 of 10
     python compute_csd_hashes.py 10 1               # Process chunk 1 of 10
     python compute_csd_hashes.py --refcode AABHTZ  # Single refcode
@@ -16,6 +22,7 @@ Usage:
 
 import argparse
 import csv
+import multiprocessing as mp
 import os
 import pickle
 import sys
@@ -34,19 +41,99 @@ from rinse_descriptor import (
     power_spectrum_to_vector,
 )
 
+# Proquint alphabet (mirrors rinse_descriptor._hash): a 5-character word is laid
+# out as consonant, vowel, consonant, vowel, consonant.
+_PROQUINT_CONSONANTS = "bdfghjklmnprstvz"  # 16 symbols (positions 1, 3, 5)
+_PROQUINT_VOWELS = "aiou"  # 4 symbols (positions 2, 4)
+_HIST_BLOCKS = " ▁▂▃▄▅▆▇█"
 
-def _print_timings(t_acc: dict, n: int) -> None:
-    total = sum(t_acc.values())
-    print(
-        f"  avg timings over {n} structures (ms):  "
-        f"res_string={t_acc['res_string'] / n * 1e3:.1f}  "
-        f"load_res={t_acc['load_res'] / n * 1e3:.1f}  "
-        f"struct_factors={t_acc['struct_factors'] / n * 1e3:.1f}  "
-        f"power_spectrum={t_acc['power_spectrum'] / n * 1e3:.1f}  "
-        f"hash={t_acc['hash'] / n * 1e3:.1f}  "
-        f"total={total / n * 1e3:.1f}",
-        file=sys.stderr,
-    )
+
+class _LetterHistogram:
+    """Accumulate per-position letter counts across proquint hash strings.
+
+    A hash of ``n_words`` proquint words has ``5 * n_words`` character
+    positions.  For each position we tally how often each allowed symbol
+    appears; :meth:`render` draws a sparkline per position so a uniform
+    distribution shows as a roughly flat bar.
+    """
+
+    def __init__(self, n_words: int) -> None:
+        self.n_words = n_words
+        self.total = 0
+        self._alphabets = [
+            _PROQUINT_VOWELS if (p % 5) in (1, 3) else _PROQUINT_CONSONANTS
+            for p in range(5 * n_words)
+        ]
+        self._counts = [dict.fromkeys(alpha, 0) for alpha in self._alphabets]
+
+    def update(self, hash_str: str) -> None:
+        """Tally the characters of one hash string."""
+        pos = 0
+        for word in hash_str.split("-"):
+            for ch in word:
+                if pos < len(self._counts) and ch in self._counts[pos]:
+                    self._counts[pos][ch] += 1
+                pos += 1
+        self.total += 1
+
+    def render(self) -> str:
+        """Return a multi-line sparkline of the per-position distributions."""
+        lines = [
+            f"  hash letter distribution over {self.total} structures "
+            f"({self.n_words} words):"
+        ]
+        for w in range(self.n_words):
+            for ip in range(5):
+                pos = w * 5 + ip
+                alpha = self._alphabets[pos]
+                counts = self._counts[pos]
+                kind = "vowel" if ip in (1, 3) else "cons "
+                peak = max(counts.values()) or 1
+                bars = "".join(
+                    _HIST_BLOCKS[min(8, round(8 * counts[ch] / peak))] for ch in alpha
+                )
+                prefix = f"    w{w + 1} p{ip + 1} {kind} "
+                lines.append(f"{prefix}{alpha}")
+                lines.append(f"{' ' * len(prefix)}{bars}")
+        return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Worker process: turn a SHELX RES string into a descriptor vector.
+# ---------------------------------------------------------------------------
+
+_WORKER_PARAMS: RinseParams | None = None
+
+
+def _worker_init(params: RinseParams) -> None:
+    """Pool initialiser: stash the shared :class:`RinseParams` per worker."""
+    global _WORKER_PARAMS
+    _WORKER_PARAMS = params
+
+
+def _worker_compute(task: tuple[str, str]) -> tuple[str, object, str | None]:
+    """Compute a descriptor for one ``(refcode, res_string)`` task.
+
+    Returns ``(refcode, descriptor, None)`` on success or
+    ``(refcode, None, error_message)`` on failure.  Runs in a worker process,
+    so exceptions are captured and returned rather than raised.
+    """
+    refcode, res_string = task
+    params = _WORKER_PARAMS
+    assert params is not None  # set by _worker_init
+    try:
+        xrs = load_res(StringIO(res_string))
+        if xrs.scatterers().size() == 0:
+            return refcode, None, "no scatterers"
+        reflections = compute_structure_factors(
+            xrs,
+            sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
+        )
+        P = compute_power_spectrum(reflections, params=params)
+        desc = power_spectrum_to_vector(P)
+        return refcode, desc, None
+    except Exception as exc:  # noqa: BLE001 - report and continue
+        return refcode, None, f"{type(exc).__name__}: {exc}"
 
 
 def _entry_to_res_string(entry: object) -> str:
@@ -67,7 +154,7 @@ def _entry_to_res_string(entry: object) -> str:
         Path(tmp_name).unlink(missing_ok=True)
 
 
-def _process_single(refcode: str) -> None:
+def _process_single(refcode: str, n_words: int) -> None:
     """Compute and print the descriptor hash for one CSD refcode."""
     reader = EntryReader("CSD")
     entry = reader.entry(refcode)
@@ -85,7 +172,7 @@ def _process_single(refcode: str) -> None:
     P = compute_power_spectrum(reflections, params=params)
     desc = power_spectrum_to_vector(P)
     t_ps = time.perf_counter()
-    hash_str = descriptor_hash(desc)
+    hash_str = descriptor_hash(desc, n_words=n_words)
     t_hash = time.perf_counter()
     print(f"{refcode}\t{hash_str}")
     print(
@@ -125,10 +212,22 @@ def main():
         default=None,
         help="Process a single refcode and print its hash, then exit",
     )
+    parser.add_argument(
+        "--n-words",
+        type=int,
+        default=2,
+        help="Number of proquint words per hash (default: 2).",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=os.cpu_count() or 1,
+        help="Worker processes for descriptor computation (default: all CPUs).",
+    )
     args = parser.parse_args()
 
     if args.refcode is not None:
-        _process_single(args.refcode)
+        _process_single(args.refcode, args.n_words)
         return
 
     if args.chunk_id >= args.num_chunks:
@@ -168,141 +267,120 @@ def main():
         descriptors = []
         processed_refcodes = set()
 
+    params = RinseParams()
+    n_words = args.n_words
+    jobs = max(1, args.jobs)
+    histogram = _LetterHistogram(n_words)
+
     # Open CSV file for writing
     with open(csv_file, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["refcode", "hash"])
 
-        # If resuming, write existing hashes to CSV first
+        # If resuming, replay existing descriptors into the CSV and histogram.
         if resuming:
             print("Writing existing hashes to CSV...", file=sys.stderr)
             for refcode, desc in zip(refcodes, descriptors):
-                hash_str = descriptor_hash(desc)
+                hash_str = descriptor_hash(desc, n_words=n_words)
                 writer.writerow([refcode, hash_str])
+                histogram.update(hash_str)
             csvfile.flush()
 
-        # Progress counter
-        count = 0
         new_count = 0
         errors = 0
-        skipped_chunk = 0
+        errors_local: list[int] = []
+        stats = {"checked": 0, "skipped_chunk": 0}
+        start_time = time.perf_counter()
 
-        # Per-step timing accumulators (seconds)
-        params = RinseParams()
-        t_acc = {
-            "res_string": 0.0,
-            "load_res": 0.0,
-            "struct_factors": 0.0,
-            "power_spectrum": 0.0,
-            "hash": 0.0,
-        }
-        t_count = 0
+        def _producer():
+            """Yield ``(refcode, res_string)`` for structures in this chunk.
 
-        # Iterate through all structures
-        print("Processing structures...", file=sys.stderr)
-        for entry_idx, entry in enumerate(reader):
-            refcode = entry.identifier
-            count += 1
-
-            # Determine if this entry belongs to our chunk
-            if args.num_chunks > 1:
-                if entry_idx % args.num_chunks != args.chunk_id:
-                    skipped_chunk += 1
+            CSD access (entry iteration and SHELX RES export) runs serially in
+            the main process; the returned RES strings are farmed out to worker
+            processes for the heavy descriptor computation.
+            """
+            for entry_idx, entry in enumerate(reader):
+                if args.num_chunks > 1 and entry_idx % args.num_chunks != args.chunk_id:
+                    stats["skipped_chunk"] += 1
                     continue
-
-            if count % 100 == 0:
-                if args.num_chunks > 1:
-                    print(
-                        f"Checked {count} structures (chunk: {count - skipped_chunk}), "
-                        f"added {new_count} new ({errors} errors)...",
-                        file=sys.stderr,
-                    )
-                else:
-                    print(
-                        f"Checked {count} structures, added {new_count} new ({errors} errors)...",
-                        file=sys.stderr,
-                    )
-                if t_count > 0:
-                    _print_timings(t_acc, t_count)
-
-            # Skip if already processed
-            if refcode in processed_refcodes:
-                continue
-
-            try:
-                # Build RES string from CSD entry
-                _t = time.perf_counter()
-                res_string = _entry_to_res_string(entry)
-                t_acc["res_string"] += time.perf_counter() - _t
-
-                # Create xray.structure from RES string
-                _t = time.perf_counter()
+                stats["checked"] += 1
+                refcode = entry.identifier
+                if refcode in processed_refcodes:
+                    continue
                 try:
-                    xrs = load_res(StringIO(res_string))
-                except Exception:
+                    res_string = _entry_to_res_string(entry)
+                except Exception as e:
+                    errors_local.append(1)
+                    print(f"Error exporting {refcode}: {e}", file=sys.stderr)
                     continue
-                t_acc["load_res"] += time.perf_counter() - _t
+                yield refcode, res_string
 
-                n_atoms = xrs.scatterers().size()
-                if n_atoms == 0:
+        print(
+            f"Processing structures with {jobs} worker process(es)...",
+            file=sys.stderr,
+        )
+
+        pool = None
+        if jobs > 1:
+            pool = mp.Pool(jobs, initializer=_worker_init, initargs=(params,))
+            results = pool.imap_unordered(_worker_compute, _producer(), chunksize=1)
+        else:
+            _worker_init(params)
+            results = (_worker_compute(task) for task in _producer())
+
+        try:
+            for refcode, desc, _err in results:
+                if desc is None:
+                    errors += 1
                     continue
 
-                # Compute structure factors
-                _t = time.perf_counter()
-                reflections = compute_structure_factors(
-                    xrs,
-                    sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
-                )
-                t_acc["struct_factors"] += time.perf_counter() - _t
-
-                # Compute power spectrum
-                _t = time.perf_counter()
-                P = compute_power_spectrum(reflections, params=params)
-                desc = power_spectrum_to_vector(P)
-                t_acc["power_spectrum"] += time.perf_counter() - _t
-
-                # Store descriptor
                 refcodes.append(refcode)
                 descriptors.append(desc)
                 processed_refcodes.add(refcode)
                 new_count += 1
-                t_count += 1
 
-                # Compute hash
-                _t = time.perf_counter()
-                hash_str = descriptor_hash(desc)
-                t_acc["hash"] += time.perf_counter() - _t
-
-                # Write to CSV and print to stdout
+                hash_str = descriptor_hash(desc, n_words=n_words)
                 writer.writerow([refcode, hash_str])
-                print(f"{refcode}\t{hash_str}")
+                histogram.update(hash_str)
 
-                # Flush periodically to save progress
+                # Every 100 new structures: checkpoint and show the distribution.
                 if new_count % 100 == 0:
                     csvfile.flush()
                     with open(pickle_file, "wb") as f:
                         pickle.dump((refcodes, descriptors), f)
 
-            except Exception as e:
-                errors += 1
-                print(f"Error processing {refcode}: {e}", file=sys.stderr)
-                continue
+                    elapsed = time.perf_counter() - start_time
+                    rate = new_count / elapsed if elapsed > 0 else 0.0
+                    checked = stats["checked"]
+                    total_errors = errors + len(errors_local)
+                    chunk_note = f" (chunk: {checked})" if args.num_chunks > 1 else ""
+                    print(
+                        f"\nChecked {checked}{chunk_note} structures, added "
+                        f"{new_count} new ({total_errors} errors)  [{rate:.1f} struct/s]",
+                        file=sys.stderr,
+                    )
+                    print(histogram.render(), file=sys.stderr)
+        finally:
+            if pool is not None:
+                pool.close()
+                pool.join()
 
-        if t_count > 0:
-            print("\nAverage timings per structure:", file=sys.stderr)
-            _print_timings(t_acc, t_count)
-
+        checked = stats["checked"]
+        total_errors = errors + len(errors_local)
         if args.num_chunks > 1:
             print(
-                f"\nComplete! Checked {count} structures ({count - skipped_chunk} in chunk), "
-                f"added {new_count} new ({errors} errors).",
+                f"\nComplete! Checked {checked} structures in chunk, "
+                f"added {new_count} new ({total_errors} errors).",
                 file=sys.stderr,
             )
         else:
             print(
-                f"\nComplete! Checked {count} structures, added {new_count} new ({errors} errors).",
+                f"\nComplete! Checked {checked} structures, "
+                f"added {new_count} new ({total_errors} errors).",
                 file=sys.stderr,
             )
+        if histogram.total:
+            print(histogram.render(), file=sys.stderr)
         print(f"Results saved to {csv_file}", file=sys.stderr)
 
     # Final save of descriptors
