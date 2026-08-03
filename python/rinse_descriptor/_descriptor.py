@@ -91,28 +91,42 @@ class RinseParams:
         ``"chebyshev"`` , ``"bessel"`` or
         ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
     intensity_normalisation:
-        Resolution-envelope normalisation for the input intensities.
-        ``"double_exponential"`` (default) fits a physically motivated
-        unbinned envelope ``A * exp(-b*s^2 - c*s^4)`` over all reflections,
-        where ``s = sin(θ)/λ``. ``"empirical"`` estimates the mean envelope in
-        adaptive sin(θ)/λ bins, transforms amplitudes as
-        ``F' = F / sqrt(envelope)``, and weights the descriptor with
-        ``I' = |F'|²``. ``"none"`` leaves calculated intensities unchanged.
+        Reflection-level resolution-envelope normalisation for the input
+        intensities.  ``"none"`` (default) leaves calculated intensities
+        unchanged; by default the resolution envelope is removed instead at the
+        power-spectrum level via ``monopole_normalisation`` (see below).
+        ``"double_exponential"`` fits a physically motivated unbinned envelope
+        ``A * exp(-b*s^2 - c*s^4)`` over all reflections, where
+        ``s = sin(θ)/λ``. ``"empirical"`` estimates the mean envelope in
+        adaptive sin(θ)/λ bins.  Both transform amplitudes as
+        ``F' = F / sqrt(envelope)`` and weight the descriptor with
+        ``I' = |F'|²``.
     intensity_normalisation_n_bins:
         Maximum number of adaptive bins for empirical intensity normalisation.
     intensity_normalisation_min_bin_size:
         Minimum target reflections per empirical normalisation bin.
     intensity_falloff:
         Amplitude falloff applied after intensity normalisation.
-        ``"debye_waller"`` (default) applies an isotropic Debye-Waller factor;
-        ``"none"`` disables falloff.
+        ``"none"`` (default) disables falloff; ``"debye_waller"`` applies an
+        isotropic Debye-Waller factor.
     intensity_falloff_u_iso:
         Average isotropic displacement parameter in Å² for Debye-Waller falloff.
-        Default 0.07.
+        Default 0.05.
     use_reported_adps:
         If *True* (default), use displacement parameters as reported in the CIF
         (isotropic or anisotropic). If *False*, all atoms are assigned isotropic
         thermal motion with U_iso = 0.05 Å².
+    monopole_normalisation:
+        If *True* (default), divide each radial level's angular power
+        ``p(n, ℓ)`` by that level's monopole (ℓ=0) power ``p(n, 0)``.  The
+        monopole is the intensity-weighted integral of the radial basis
+        function ``R_n`` over reciprocal space, i.e. the spherically-averaged
+        scattering power in shell *n*; dividing by it removes the
+        resolution-dependent intensity envelope on a per-shell basis.  This is
+        the default resolution-envelope handling (an alternative to the
+        reflection-level ``intensity_normalisation``) and is robust to
+        systematic absences (which do not contribute to the ℓ=0 projection).
+        Applied before ``log1p`` and ``l2``.
     """
 
     n_max: int = 8
@@ -123,12 +137,13 @@ class RinseParams:
     radial_basis: RadialBasisType = "smooth_shells_nl"
     intensity_normalisation: (
         IntensityNormalisation | Literal["none", "double_exponential", "empirical"]
-    ) = "double_exponential"
+    ) = "none"
     intensity_normalisation_n_bins: int | None = None
     intensity_normalisation_min_bin_size: int | None = None
-    intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller"
-    intensity_falloff_u_iso: float = 0.07
+    intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "none"
+    intensity_falloff_u_iso: float = 0.05
     use_reported_adps: bool = True
+    monopole_normalisation: bool = True
     log1p: bool = False
     l2: bool = True
     flatten: bool = True
@@ -432,6 +447,28 @@ def compute_power_spectrum(
             f"(n_max={params.n_max})",
             file=sys.stderr,
         )
+
+    if params.monopole_normalisation:
+        _t = time.perf_counter()
+        # Monopole (ℓ=0) power per radial level.  The real spherical harmonic
+        # Y_00 = 1/sqrt(4π) is constant over the sphere, so the ℓ=0 projection
+        # at radial level n is  A_{n00} = Y_00 · Σ_i I_i R_n(|G_i|)  and its
+        # power is  p(n,0) = A_{n00}².  This is the intensity-weighted integral
+        # of R_n over reciprocal space (the spherically-averaged scattering
+        # power in shell n).  Systematic absences (I≈0) contribute nothing, so
+        # it is a robust per-shell estimate of the resolution envelope.
+        y00 = 0.5 / _msqrt(_pi)
+        monopole = (W.sum(axis=0) * y00) ** 2  # (n_max,)
+        max_mono = float(monopole.max()) if monopole.size else 0.0
+        floor = sys.float_info.epsilon * max_mono
+        denom = np.where(monopole > floor, monopole, np.inf)
+        P = P / denom[:, np.newaxis]
+        if debug:
+            print(
+                "[rinse_descriptor] ps: monopole norm:    "
+                f"{(time.perf_counter() - _t) * 1e3:8.2f} ms",
+                file=sys.stderr,
+            )
 
     _t = time.perf_counter()
     result = normalise_power_spectrum(P, log1p=params.log1p, l2=params.l2)

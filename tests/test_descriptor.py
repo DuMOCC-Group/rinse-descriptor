@@ -7,7 +7,7 @@ Structures tested:
   - 1-Methylpiperazinium oxalate dihydrate
 
 Properties verified:
-    - Descriptor shape: 128 elements by default (flat 1-D), (16, 8) when flatten=False
+  - Descriptor shape: 64 elements by default (flat 1-D), (8, 8) when flatten=False
   - Consistency: two calls with identical input return identical output
   - Non-negativity
   - Atom substitution sensitivity
@@ -156,9 +156,11 @@ class TestNonNegativity:
 
 
 class TestStructureFactors:
-    def test_default_intensity_normalisation_is_double_exponential(self, ylid: object) -> None:
-        assert RinseParams().intensity_normalisation == "double_exponential"
-        assert RinseParams().intensity_falloff == "debye_waller"
+    def test_default_intensity_handling_is_none(self, ylid: object) -> None:
+        assert RinseParams().intensity_normalisation == "none"
+        assert RinseParams().intensity_falloff == "none"
+        assert RinseParams().monopole_normalisation is True
+        assert RinseParams().sin_theta_over_lambda_max == 0.5
         assert RinseParams().intensity_falloff_u_iso == 0.05
         assert RinseParams().use_reported_adps is True
 
@@ -169,9 +171,8 @@ class TestStructureFactors:
         refls_explicit = compute_structure_factors(
             ylid,
             sin_theta_over_lambda_max=0.6,
-            intensity_normalisation="double_exponential",
-            intensity_falloff="debye_waller",
-            intensity_falloff_u_iso=0.05,
+            intensity_normalisation="none",
+            intensity_falloff="none",
         )
         np.testing.assert_allclose(refls_default.intensities, refls_explicit.intensities)
 
@@ -500,3 +501,23 @@ class TestAdditionalInvariances:
         x_nacl = descriptor(nacl, params=params)
         x_si = descriptor(silicon, params=params)
         assert not np.allclose(x_nacl, x_si, rtol=1e-4, atol=1e-6)
+
+    def test_setting_invariance_tetrazole(self) -> None:
+        # TETRAZ01 and TETRAZ02 are the same crystal (tetrazole) described in
+        # two different settings: TETRAZ01 is a ~3x super-cell of TETRAZ02. The
+        # descriptor should be (nearly) invariant to this choice of setting.
+        #
+        # In the super-cell the systematically absent reflections appear
+        # explicitly as near-zero |F|^2 rather than being omitted. The
+        # double-exponential intensity normalisation fits its envelope to a
+        # Gaussian-broadened powder profile built by summing intensities, so
+        # those absences contribute nothing and the descriptor stays comparable
+        # across settings.
+        x1 = load_res(FIXTURES_DIR / "TETRAZ01.res")
+        x2 = load_res(FIXTURES_DIR / "TETRAZ02.res")
+
+        d1 = descriptor(x1)
+        d2 = descriptor(x2)
+
+        cosine = self._cosine_similarity(d1, d2)
+        assert cosine > 0.99, f"setting invariance too low: cosine={cosine:.4f}"

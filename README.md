@@ -11,9 +11,11 @@ For a crystal, all reflections $\mathbf{G}_{\mathrm{hkl}}$ within a resolution c
 Each reflection is assigned an intensity $\mathrm{I}(\mathbf{G}) = \lvert\mathrm{F}(\mathbf{G})\rvert^{2}$ from the
 structure factor calculated via cctbx direct summation with 
 X-ray form factors by default. Isotropic and anisotropic displacement parameters are read from
-the CIF by default; double-exponential reciprocal-space intensity normalisation then
-removes the mean resolution dependence, followed by an isotropic Debye-Waller (Uiso = 0.07)
-falloff that softly damps high-resolution reflections.
+the CIF by default. The resolution-dependent intensity envelope is removed at the power-spectrum
+level by **monopole (*l* = 0) normalisation**, which divides each radial level by its
+spherically-averaged scattering power. Reflection-level intensity normalisation
+(double-exponential or empirical) and the isotropic Debye-Waller (Uiso = 0.05) falloff are
+available but off by default.
 
 The expansion coefficients are:
 
@@ -118,8 +120,8 @@ params = RinseParams(
     l_max=36,                       # angular levels (gives l = 4,6,...,34 by default)
     sin_theta_over_lambda_max=0.6,  # resolution cutoff in Å⁻¹
     radial_basis="chebyshev",       # or "bessel" / "smooth_shells_cw" / "smooth_shells_nl"
-    intensity_normalisation="none",  # optional: disable the default double-exponential envelope removal
-    intensity_falloff="none",        # optional: disable the default Debye-Waller falloff
+    monopole_normalisation=False,    # optional: disable the default monopole (ℓ=0) envelope removal
+    intensity_normalisation="double_exponential",  # optional reflection-level envelope removal (off by default)
 )
 x = descriptor("mystructure.cif", params=params)
 ```
@@ -132,20 +134,21 @@ from rinse_descriptor import descriptor
 # Electron scattering factors; descriptor weights are still intensities I = |F|²
 x = descriptor("mystructure.cif", form_factor_type="electron")
 
-# Double-exponential envelope removal and Debye-Waller falloff are on by default.
-# Set intensity_normalisation="none" and/or intensity_falloff="none" to opt out.
+# Monopole (l=0) normalisation removes the resolution envelope by default.
+# Reflection-level intensity_normalisation and Debye-Waller falloff are off by default;
+# enable with intensity_normalisation="double_exponential" / intensity_falloff="debye_waller".
 x_norm = descriptor("mystructure.cif")
 ```
 
 Available `form_factor_type` values: `"xray"` (default), `"electron"`, `"neutron"`.
 
 Available `intensity_normalisation` values:
-`"double_exponential"` (default), `"empirical"`, `"none"`.
+`"none"` (default), `"double_exponential"`, `"empirical"`.
 
-Available `intensity_falloff` values: `"debye_waller"` (default), `"none"`.
+Available `intensity_falloff` values: `"none"` (default), `"debye_waller"`.
 For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic
 displacement parameter used in the amplitude factor
-$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.07` Å².
+$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.05` Å².
 
 ## Locality-sensitive hashing
 

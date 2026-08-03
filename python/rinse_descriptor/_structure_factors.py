@@ -30,19 +30,22 @@ Structure factor types
 
 Intensity normalisation
 -----------------------
-* ``"double_exponential"`` — fit an unbinned physically motivated envelope
-    ``A * exp(-b*s^2 - c*s^4)`` to ``|F|²`` over all reflections, where
-    ``s = sin(θ)/λ`` (default)
+* ``"none"``      — use calculated intensities as-is (default)
+* ``"double_exponential"`` — fit a physically motivated envelope
+    ``A * exp(-b*s^2 - c*s^4)`` to a simulated powder profile of ``|F|²`` over
+    ``s = sin(θ)/λ``: intensities are summed onto the ``s`` axis and
+    heavily Gaussian-broadened before fitting. Summing drops systematic
+    absences and the smooth profile makes the envelope invariant to the
+    unit-cell setting.
 * ``"empirical"`` — estimate the resolution envelope of |F|² from adaptive
     bins in sin(θ)/λ, divide amplitudes by sqrt(envelope), then convert back to
     the requested output type
-* ``"none"``      — use calculated intensities as-is
 
 Intensity falloff
 -----------------
+* ``"none"`` — do not apply an additional falloff (default)
 * ``"debye_waller"`` — multiply amplitudes by an isotropic Debye-Waller factor
-    with configurable average U_iso (default)
-* ``"none"`` — do not apply an additional falloff
+    with configurable average U_iso
 
 By default, isotropic and anisotropic displacement parameters are used as stored
 in the :class:`cctbx.xray.structure`. Pass ``use_reported_adps=False`` to reset
@@ -153,10 +156,10 @@ def compute_structure_factors(
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
     structure_factor_type: StructureFactorType | Literal["F", "F2"] = "F2",
     intensity_normalisation: IntensityNormalisation
-    | Literal["none", "double_exponential", "empirical"] = "double_exponential",
+    | Literal["none", "double_exponential", "empirical"] = "none",
     intensity_normalisation_n_bins: int | None = 6,
     intensity_normalisation_min_bin_size: int | None = 50,
-    intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "debye_waller",
+    intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "none",
     intensity_falloff_u_iso: float = 0.05,
     use_reported_adps: bool = True,
     debug: bool = False,
@@ -175,9 +178,13 @@ def compute_structure_factors(
         Output structure factor type. ``"F2"`` | ``"F"``.
     intensity_normalisation:
         Resolution-envelope normalisation to apply before output conversion.
-        ``"double_exponential"`` fits ``A * exp(-b*s^2 - c*s^4)`` to
-        ``|F|²`` using all reflections (no binning), applies
+        ``"none"`` (default) leaves calculated intensities unchanged.
+        ``"double_exponential"`` fits ``A * exp(-b*s^2 - c*s^4)`` to a simulated,
+        Gaussian-broadened powder profile of ``|F|²``, applies
         ``F' = F / sqrt(envelope)``, then returns either ``|F'|²`` or ``|F'|``.
+        Summing intensities onto the ``sin(theta)/lambda`` axis drops systematic
+        absences and keeps the envelope invariant to the reflection count and to
+        the unit-cell setting.
         ``"empirical"`` estimates ⟨|F|²⟩ in adaptive sin(θ)/λ bins, applies
         ``F' = F / sqrt(envelope)``, then returns either ``|F'|²`` or ``|F'|``.
     intensity_normalisation_n_bins:
@@ -187,8 +194,9 @@ def compute_structure_factors(
         Minimum target reflections per adaptive bin. If *None*, uses 50.
     intensity_falloff:
         Amplitude falloff to apply after intensity normalisation.
-        ``"debye_waller"`` multiplies amplitudes by
-        ``exp(-8 * pi**2 * U_iso * s**2)``, where ``s = sin(theta)/lambda``.
+        ``"none"`` (default) disables falloff.  ``"debye_waller"`` multiplies
+        amplitudes by ``exp(-8 * pi**2 * U_iso * s**2)``, where
+        ``s = sin(theta)/lambda``.
     intensity_falloff_u_iso:
         Average isotropic displacement parameter in Å² for ``"debye_waller"``
         falloff. Must be non-negative.
@@ -412,8 +420,11 @@ def _empirical_intensity_envelope(
 def _double_exponential_intensity_envelope(
     q_magnitudes: NDArray[np.float64],
     intensities: NDArray[np.float64],
+    *,
+    broadening: float = 0.15,
+    n_grid: int = 200,
 ) -> NDArray[np.float64]:
-    """Fit ``A * exp(-b*s^2 - c*s^4)`` to ``|F|²`` using all reflections.
+    """Fit ``A * exp(-b*s^2 - c*s^4)`` to a broadened powder profile.
 
     The model combines two physically motivated decay factors over
     ``s = sin(theta)/lambda``:
@@ -421,12 +432,35 @@ def _double_exponential_intensity_envelope(
     - atomic form-factor falloff (captured by ``exp(-b*s^2)``)
     - Debye-Waller-like damping (captured by ``exp(-c*s^4)``)
 
-    Fitting is done with nonlinear least squares in a positive parameterisation:
-    ``A = exp(theta0)``, ``b = exp(theta1)``, ``c = exp(theta2)``.
-    Residuals are evaluated in log-space to balance low/high intensity ranges.
+    Rather than fitting the individual (noisy, unevenly sampled) reflections,
+    the intensities are first collapsed onto the 1-D ``s`` axis as a simulated
+    powder pattern and heavily smeared with a Gaussian kernel of width
+    ``broadening * s_max``. The smooth profile is sampled on ``n_grid`` points
+    and the double-exponential is fit to it in log-space.
+
+    This makes the envelope both smooth and invariant to the choice of
+    unit-cell setting:
+
+    - Building the profile by *summing* intensities means systematically absent
+      reflections (near-zero ``|F|²``) contribute nothing, so they cannot
+      distort the fit even when a lower-symmetry or super-cell description lists
+      them explicitly.
+    - A super-cell description merely scales the coincident ``|F|²`` values (and
+      hence the whole profile) by a constant factor, which leaves the fitted
+      decay unchanged and cancels in ``F' = F / sqrt(envelope)``.
+
+    The envelope is then evaluated at *all* reflections. Fitting uses nonlinear
+    least squares in a positive parameterisation: ``A = exp(theta0)``,
+    ``b = exp(theta1)``, ``c = exp(theta2)``. Residuals are evaluated in
+    log-space and weighted by the local reflection density so well-sampled
+    resolution ranges dominate the fit.
     """
     if q_magnitudes.shape != intensities.shape:
         raise ValueError("q_magnitudes and intensities must have the same shape")
+    if broadening <= 0.0:
+        raise ValueError(f"broadening must be > 0, got {broadening}")
+    if n_grid < 3:
+        raise ValueError(f"n_grid must be >= 3, got {n_grid}")
 
     floor = np.finfo(np.float64).tiny
     finite = np.isfinite(q_magnitudes) & np.isfinite(intensities) & (intensities > 0.0)
@@ -434,15 +468,39 @@ def _double_exponential_intensity_envelope(
         return np.ones_like(intensities, dtype=np.float64)
 
     s = 0.5 * q_magnitudes
-    s_fit = s[finite]
-    y_fit = np.maximum(intensities[finite], floor)
-    log_y_fit = np.log(y_fit)
+    s_finite = s[finite]
+    y_finite = np.maximum(intensities[finite], floor)
 
-    # Build a stable initial guess from the linearised model.
-    s2 = s_fit * s_fit
+    s_max = float(s_finite.max())
+    if s_max <= 0.0:
+        return np.full_like(intensities, float(np.sum(y_finite)), dtype=np.float64)
+
+    # Simulate a powder pattern (intensity summed onto the s axis) and smear it
+    # with a wide Gaussian to obtain a smooth intensity profile. ``profile`` is
+    # the broadened summed intensity; ``density`` is the matching broadened
+    # reflection count, used to weight the fit toward well-sampled resolutions.
+    sigma = broadening * s_max
+    grid = np.linspace(0.0, s_max, n_grid)
+    kernel = np.exp(-0.5 * ((grid[:, None] - s_finite[None, :]) / sigma) ** 2)
+    profile = kernel @ y_finite
+    density = kernel.sum(axis=1)
+
+    good = (profile > floor) & (density > floor)
+    if int(good.sum()) >= 3:
+        fit_s = grid[good]
+        log_y_fit = np.log(profile[good])
+        weights = np.sqrt(density[good])
+    else:
+        # Degenerate profile; fall back to the individual reflections.
+        fit_s = s_finite
+        log_y_fit = np.log(y_finite)
+        weights = np.ones_like(s_finite)
+
+    # Build a stable initial guess from the weighted linearised model.
+    s2 = fit_s * fit_s
     s4 = s2 * s2
-    X = np.column_stack((np.ones_like(s2), s2, s4))
-    coeffs, *_ = np.linalg.lstsq(X, log_y_fit, rcond=None)
+    X = np.column_stack((np.ones_like(s2), s2, s4)) * weights[:, None]
+    coeffs, *_ = np.linalg.lstsq(X, log_y_fit * weights, rcond=None)
 
     log_a0 = float(coeffs[0])
     b0 = max(-float(coeffs[1]), float(np.spacing(1.0)))
@@ -453,7 +511,7 @@ def _double_exponential_intensity_envelope(
         log_a, log_b, log_c = theta
         b = np.exp(log_b)
         c = np.exp(log_c)
-        return (log_a - b * s2 - c * s4) - log_y_fit  # type: ignore[no-any-return]
+        return weights * ((log_a - b * s2 - c * s4) - log_y_fit)  # type: ignore[no-any-return]
 
     fit = least_squares(_residual, theta0, method="trf")
     theta = fit.x if fit.success else theta0

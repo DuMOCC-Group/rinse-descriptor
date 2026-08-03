@@ -136,7 +136,19 @@ def _make_parser() -> argparse.ArgumentParser:
         metavar="U",
         help="Average U_iso in Å² for --intensity-falloff=debye_waller.",
     )
-    p.set_defaults(log1p=defaults.log1p, l2=defaults.l2)
+    norm.add_argument(
+        "--no-monopole-normalisation",
+        dest="monopole_normalisation",
+        action="store_false",
+        help=(
+            "Disable monopole (ℓ=0) normalisation, which by default divides each "
+            "radial level's angular power by its ℓ=0 power to remove the "
+            "resolution-dependent intensity envelope."
+        ),
+    )
+    p.set_defaults(
+        log1p=defaults.log1p, l2=defaults.l2, monopole_normalisation=defaults.monopole_normalisation
+    )
 
     # Structure factors
     sf = p.add_argument_group("structure factors")
@@ -238,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
             intensity_normalisation_min_bin_size=args.intensity_normalisation_min_bin_size,
             intensity_falloff=args.intensity_falloff,
             intensity_falloff_u_iso=args.intensity_falloff_u_iso,
+            monopole_normalisation=args.monopole_normalisation,
             log1p=args.log1p,
             l2=args.l2,
             flatten=args.flatten,

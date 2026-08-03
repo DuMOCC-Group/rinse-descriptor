@@ -104,7 +104,7 @@ class TestHashFormat:
         assert len(words) == 1
 
     def test_custom_n_words(self, nacl_vec: np.ndarray) -> None:
-        for n in (1, 3, 7):
+        for n in (1, 2, 3):
             h = descriptor_hash(nacl_vec, n_words=n)
             assert len(h.split("-")) == n
 
@@ -161,7 +161,7 @@ class TestHashToBits:
         assert bits.shape == (1 * _BITS_PER_WORD,)
 
     def test_bits_shape_custom_words(self, nacl_vec: np.ndarray) -> None:
-        for n in (1, 3, 7):
+        for n in (1, 2, 3):
             bits = hash_to_bits(descriptor_hash(nacl_vec, n_words=n))
             assert bits.shape == (n * _BITS_PER_WORD,)
 
@@ -219,8 +219,8 @@ class TestBlocklist:
     def test_no_blocked_substring_in_hash_output(self) -> None:
         rng = np.random.default_rng(42)
         for _ in range(200):
-            vec = rng.standard_normal(128)
-            words = descriptor_hash(vec, n_words=8).split("-")
+            vec = rng.standard_normal(64)
+            words = descriptor_hash(vec, n_words=4).split("-")
             for word in words:
                 for sub in _BLOCKED_SUBSTRINGS:
                     assert sub not in word, f"Blocked substring {sub!r} in hash word {word!r}"
