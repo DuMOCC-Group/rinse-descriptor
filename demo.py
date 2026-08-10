@@ -75,14 +75,15 @@ def _(mo):
     **Reciprocal-space INvariant Spectral Embedding*
 
     Computes the intensity-weighted reciprocal-space power spectrum for any
-    crystal structure. The descriptor is by default an **8 × 8 matrix** (64 elements)
+    crystal structure. The descriptor is by default an **8 × 16 matrix** (128 elements)
     indexed by radial order *n* and even angular
-    level *ℓ* ∈ {4, 6, 8, …, 18}.
+    level *ℓ* ∈ {4, 6, 8, …, 34}.
 
-    Descriptor weights are intensities, I = |F|². The default double-exponential
-    intensity normalisation removes the mean resolution-dependent intensity
-    envelope, then an isotropic Debye-Waller falloff softly damps high-resolution
-    reflections before the power spectrum is accumulated.
+    Descriptor weights are intensities, I = |F|². By default the
+    resolution-dependent intensity envelope is removed at the power-spectrum
+    level by monopole (ℓ=0) normalisation, which divides each radial level by
+    its spherically-averaged scattering power. Reflection-level intensity
+    normalisation and the Debye-Waller falloff are available but off by default.
 
     Upload a structure file, then adjust
     the parameters below.
@@ -121,13 +122,21 @@ def _(mo):
     0.6 is atomic resolution, and this should be more than enough.
     It may be justfied to reduce this.
 
-    Intensity normalisation estimates the mean |F|² envelope in adaptive
-    sin_theta_over_lambda bins. The normalisation is applied as F' =
-    F / sqrt(envelope), then the descriptor is weighted with I' = |F'|².
+    Monopole (ℓ=0) normalisation is the default resolution-envelope removal:
+    each radial level's angular power p(n, ℓ) is divided by its monopole power
+    p(n, 0), the spherically-averaged scattering in that shell. Systematic
+    absences do not contribute to the ℓ=0 projection, so it is robust.
 
-    Intensity falloff applies an amplitude window after normalisation. The
-    default Debye-Waller falloff multiplies amplitudes by exp(-8π² U_iso s²),
-    where s = sin(theta)/lambda and U_iso defaults to 0.07 Å².
+    Intensity normalisation (off by default) is a reflection-level alternative
+    that estimates the mean |F|² envelope (adaptive bins for empirical, or a
+    fitted A·exp(-b·s²-c·s⁴) for double-exponential), applied as F' =
+    F / sqrt(envelope), then weights the descriptor with I' = |F'|².
+
+    Intensity falloff (off by default) applies an amplitude window. The
+    Debye-Waller falloff multiplies amplitudes by exp(-8π² U_iso s²),
+    where s = sin(theta)/lambda and U_iso defaults to 0.0 Å².
+    This will be normalised out by the monopole normalisation if both
+    are used.
 
     log1p compression reduces the dynamic range of the descriptor.
     This is generally required when monopoles are included.
@@ -201,6 +210,10 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         label="Falloff U_iso  (Å²)",
         show_value=True,
     )
+    monopole_norm_cb = mo.ui.checkbox(
+        value=_defaults["monopole_normalisation"],
+        label="monopole (ℓ=0) normalisation",
+    )
     log1p_compression_cb = mo.ui.checkbox(value=_defaults["log1p"], label="log1p compression")
     l2_normalisation_cb = mo.ui.checkbox(value=_defaults["l2"], label="l2 normalisation")
     include_odd_l_cb = mo.ui.checkbox(value=_defaults["include_odd_l"], label="include odd ℓ")
@@ -222,6 +235,7 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
                     intensity_norm_dd,
                     intensity_falloff_dd,
                     intensity_falloff_u_iso_slider,
+                    monopole_norm_cb,
                     log1p_compression_cb,
                     l2_normalisation_cb,
                     include_odd_l_cb,
@@ -244,6 +258,7 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         l_max_slider,
         l_min_slider,
         log1p_compression_cb,
+        monopole_norm_cb,
         n_max_slider,
         n_words_slider,
         stol_slider,
@@ -285,6 +300,7 @@ def _(
     l_min_slider,
     load_structure,
     log1p_compression_cb,
+    monopole_norm_cb,
     n_max_slider,
     power_spectrum_to_vector,
     stol_slider,
@@ -329,6 +345,7 @@ def _(
                 intensity_normalisation=intensity_norm_dd.value,
                 intensity_falloff=intensity_falloff_dd.value,
                 intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
+                monopole_normalisation=monopole_norm_cb.value,
                 log1p=log1p_compression_cb.value,
                 l2=l2_normalisation_cb.value,
                 flatten=False,
@@ -360,126 +377,6 @@ def _(
     if compute_error:
         print(compute_error)
     return P, compute_error, crystal, os, params, tempfile, vec
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Intensity normalisation and re-windowing
-
-    This view compares three reflection-intensity envelopes for the uploaded structure:
-
-    - raw calculated intensities, $|F|^2$
-        - normalised intensities after the selected intensity normalisation mode
-            (`empirical` or `double_exponential`)
-    - re-windowed intensities after applying the isotropic Debye-Waller factor
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(
-    compute_error,
-    compute_structure_factors,
-    crystal,
-    ff_dd,
-    intensity_falloff_u_iso_slider,
-    intensity_norm_dd,
-    mo,
-    np,
-    plt,
-    stol_slider,
-):
-    if compute_error or crystal is None:
-        mo.stop(True)
-
-    _norm_mode = intensity_norm_dd.value
-    if _norm_mode not in {"empirical", "double_exponential"}:
-        _norm_mode = "empirical"
-
-    _raw_refls = compute_structure_factors(
-        crystal,
-        sin_theta_over_lambda_max=stol_slider.value,
-        form_factor_type=ff_dd.value,
-        structure_factor_type="F2",
-        intensity_normalisation="none",
-        intensity_falloff="none",
-    )
-    _normalised_refls = compute_structure_factors(
-        crystal,
-        sin_theta_over_lambda_max=stol_slider.value,
-        form_factor_type=ff_dd.value,
-        structure_factor_type="F2",
-        intensity_normalisation=_norm_mode,
-        intensity_falloff="none",
-    )
-    _windowed_refls = compute_structure_factors(
-        crystal,
-        sin_theta_over_lambda_max=stol_slider.value,
-        form_factor_type=ff_dd.value,
-        structure_factor_type="F2",
-        intensity_normalisation=_norm_mode,
-        intensity_falloff="debye_waller",
-        intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
-    )
-
-    _s = 0.5 * _raw_refls.q_magnitudes
-    _order = np.argsort(_s)
-    _bin_count = max(8, min(24, len(_order) // 40))
-    _bin_count = 6
-    _bins = [idx for idx in np.array_split(_order, _bin_count) if len(idx) > 0]
-    _centers = np.array([float(np.mean(_s[idx])) for idx in _bins])
-    _raw_means = np.array([float(np.mean(_raw_refls.intensities[idx])) for idx in _bins])
-    _normalised_means = np.array(
-        [float(np.mean(_normalised_refls.intensities[idx])) for idx in _bins]
-    )
-    _windowed_means = np.array([float(np.mean(_windowed_refls.intensities[idx])) for idx in _bins])
-
-    _expected_window = np.exp(
-        -16.0 * np.pi**2 * intensity_falloff_u_iso_slider.value * _centers * _centers
-    )
-    _observed_window = _windowed_means / np.maximum(_normalised_means, np.finfo(np.float64).tiny)
-
-    _fig, (_ax1) = plt.subplots(1, 1, figsize=(6, 4), sharex=True)
-
-    _ax1.scatter(
-        _s,
-        _raw_refls.intensities,
-        s=6,
-        alpha=0.12,
-        color="#7F7F7F",
-        label="Raw reflections",
-    )
-    _ax1.plot(_centers, _raw_means, "o-", lw=1.8, color="#1F77B4", label="Raw bin means")
-    _ax1.plot(
-        _centers,
-        _normalised_means,
-        "o-",
-        lw=1.8,
-        color="#2CA02C",
-        label=f"After {_norm_mode.replace('_', '-')} normalisation",
-    )
-    _ax1.plot(
-        _centers,
-        _windowed_means,
-        "o-",
-        lw=1.8,
-        color="#D62728",
-        label="After Debye-Waller re-windowing",
-    )
-    _ax1.set_yscale("log")
-    _ax1.set_ylabel(r"Mean $|F|^2$", fontsize=10)
-    _ax1.set_xlabel(r"$\sin\theta/\lambda$ / $\mathrm{\AA}^{-1}$", fontsize=10)
-    _ax1.set_title(
-        f"Intensity envelope ({_norm_mode.replace('_', '-')}) before/after re-windowing",
-        fontsize=11,
-    )
-    _ax1.legend(fontsize=8, loc="upper right")
-    _ax1.grid(alpha=0.2)
-
-    plt.tight_layout()
-    _fig
-    return
 
 
 @app.cell(hide_code=True)
@@ -539,6 +436,7 @@ def _(P, compute_error, mo, np, plt, vec):
     _ax.set_xlim(0, len(_vec) - 1)
     # plt.yscale('log')
     plt.tight_layout()
+    plt.savefig('out.svg')
     _fig2
     return
 
@@ -1082,6 +980,7 @@ def _(
     l_min_slider,
     load_structure,
     log1p_compression_cb,
+    monopole_norm_cb,
     n_max_slider,
     os,
     power_spectrum_to_vector,
@@ -1124,6 +1023,7 @@ def _(
                 intensity_normalisation=intensity_norm_dd.value,
                 intensity_falloff=intensity_falloff_dd.value,
                 intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
+                monopole_normalisation=monopole_norm_cb.value,
                 log1p=log1p_compression_cb.value,
                 l2=l2_normalisation_cb.value,
                 flatten=False,

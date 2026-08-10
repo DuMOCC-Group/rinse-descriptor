@@ -47,6 +47,14 @@ from ._structure_factors import (  # noqa: E402
 )
 
 __version__ = "0.1.0"
+
+
+class _Unset:
+    """Sentinel: argument not supplied; fall back to the value from ``params``."""
+
+
+_UNSET = _Unset()
+
 __all__ = [
     "load_cif",
     "load_res",
@@ -73,7 +81,7 @@ def descriptor(
     *,
     params: RinseParams | None = None,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
-    use_reported_adps: bool | None = None,
+    set_fixed_uiso: float | None | _Unset = _UNSET,
     debug: bool = False,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a single structure.
@@ -90,10 +98,11 @@ def descriptor(
         *True*) or the 2-D ``(n_max, n_l_levels)`` matrix.
     form_factor_type:
         ``"xray"`` | ``"electron"`` | ``"neutron"``.
-    use_reported_adps:
-        If *True*, use displacement parameters from the CIF. If *False*, all
-        atoms are reset to isotropic U_iso = 0.05 Å². Uses
-        ``params.use_reported_adps`` when *None*.
+    set_fixed_uiso:
+        If *None*, use the displacement parameters from the CIF/RES file. If a
+        float, discard the reported ADPs and set all atoms to isotropic
+        U_iso = ``set_fixed_uiso`` Å². Uses ``params.set_fixed_uiso`` when not
+        supplied.
 
     Notes
     -----
@@ -128,8 +137,8 @@ def descriptor(
 
     if params is None:
         params = RinseParams()
-    if use_reported_adps is None:
-        use_reported_adps = params.use_reported_adps
+    if isinstance(set_fixed_uiso, _Unset):
+        set_fixed_uiso = params.set_fixed_uiso
 
     _t = time.perf_counter()
     reflections = compute_structure_factors(
@@ -142,7 +151,7 @@ def descriptor(
         intensity_normalisation_min_bin_size=params.intensity_normalisation_min_bin_size,
         intensity_falloff=params.intensity_falloff,
         intensity_falloff_u_iso=params.intensity_falloff_u_iso,
-        use_reported_adps=use_reported_adps,
+        set_fixed_uiso=set_fixed_uiso,
         debug=debug,
     )
     if debug:
@@ -173,7 +182,7 @@ def descriptor_many(
     *,
     params: RinseParams | None = None,
     form_factor_type: FormFactorType | Literal["xray", "electron", "neutron"] = "xray",
-    use_reported_adps: bool | None = None,
+    set_fixed_uiso: float | None | _Unset = _UNSET,
 ) -> NDArray[np.float64]:
     """Compute the RINSE descriptor for a list of structures.
 
@@ -186,10 +195,11 @@ def descriptor_many(
         Shared descriptor hyper-parameters.
     form_factor_type:
         Passed to :func:`descriptor`.
-    use_reported_adps:
-        If *True*, use displacement parameters from the CIF. If *False*, all
-        atoms are reset to isotropic U_iso = 0.05 Å². Uses
-        ``params.use_reported_adps`` when *None*.
+    set_fixed_uiso:
+        If *None*, use the displacement parameters from the CIF/RES file. If a
+        float, discard the reported ADPs and set all atoms to isotropic
+        U_iso = ``set_fixed_uiso`` Å². Uses ``params.set_fixed_uiso`` when not
+        supplied.
 
     Returns
     -------
@@ -201,7 +211,7 @@ def descriptor_many(
             s,
             params=params,
             form_factor_type=form_factor_type,
-            use_reported_adps=use_reported_adps,
+            set_fixed_uiso=set_fixed_uiso,
         )
         for s in structures
     ]

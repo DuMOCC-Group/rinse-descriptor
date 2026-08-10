@@ -48,8 +48,9 @@ Intensity falloff
     with configurable average U_iso
 
 By default, isotropic and anisotropic displacement parameters are used as stored
-in the :class:`cctbx.xray.structure`. Pass ``use_reported_adps=False`` to reset
-all atoms to isotropic thermal motion with U_iso = 0.05 Å².
+in the :class:`cctbx.xray.structure`. Pass ``set_fixed_uiso=<value>`` to discard
+the reported ADPs and reset all atoms to isotropic thermal motion with that
+U_iso (in Å²).
 """
 
 from __future__ import annotations
@@ -161,7 +162,7 @@ def compute_structure_factors(
     intensity_normalisation_min_bin_size: int | None = 50,
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "none",
     intensity_falloff_u_iso: float = 0.05,
-    use_reported_adps: bool = True,
+    set_fixed_uiso: float | None = None,
     debug: bool = False,
 ) -> ReflectionList:
     """Compute structure factors and return a :class:`ReflectionList`.
@@ -200,9 +201,10 @@ def compute_structure_factors(
     intensity_falloff_u_iso:
         Average isotropic displacement parameter in Å² for ``"debye_waller"``
         falloff. Must be non-negative.
-    use_reported_adps:
-        If *True* (default), use displacement parameters from the CIF. If
-        *False*, all atoms are reset to isotropic U_iso = 0.05 Å².
+    set_fixed_uiso:
+        If *None* (default), use the displacement parameters from the CIF. If a
+        float, discard the reported ADPs and reset all atoms to isotropic
+        U_iso = ``set_fixed_uiso`` Å².
     """
     ff_type = FormFactorType(form_factor_type)
     sf_type = StructureFactorType(structure_factor_type)
@@ -217,7 +219,7 @@ def compute_structure_factors(
     recip = np.linalg.inv(orth.T).T  # rows = a*, b*, c*
 
     _t = time.perf_counter()
-    hkl_arr, F_vals = _calc_cctbx(xrs, d_min, ff_type, use_reported_adps=use_reported_adps)
+    hkl_arr, F_vals = _calc_cctbx(xrs, d_min, ff_type, set_fixed_uiso=set_fixed_uiso)
     if debug:
         print(
             f"[rinse_descriptor] sf: calculate F(hkl):"
@@ -296,7 +298,7 @@ def _calc_cctbx(
     d_min: float,
     ff_type: FormFactorType,
     *,
-    use_reported_adps: bool = True,
+    set_fixed_uiso: float | None = None,
 ) -> tuple[NDArray[np.int32], NDArray[np.complex128]]:
     """Compute F(hkl) using cctbx and expand to the full reciprocal sphere.
 
@@ -311,14 +313,14 @@ def _calc_cctbx(
     """
     xrs_calc = xrs.deep_copy_scatterers()
 
-    if not use_reported_adps:
-        # Reset every atom to isotropic U_iso = 0.05 Å², giving a consistent
-        # baseline regardless of what (if anything) was reported in the CIF.
+    if set_fixed_uiso is not None:
+        # Discard reported ADPs and reset every atom to a fixed isotropic U_iso,
+        # giving a consistent baseline regardless of what was reported in the CIF.
         xrs_calc.convert_to_isotropic()
         scs = xrs_calc.scatterers()
         for i in range(scs.size()):
             sc = scs[i]
-            sc.u_iso = 0.05
+            sc.u_iso = set_fixed_uiso
             scs[i] = sc
 
     xrs_calc.scattering_type_registry(table=_CCTBX_TABLES[ff_type])

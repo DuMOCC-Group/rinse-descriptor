@@ -19,8 +19,8 @@ contributions from odd-l harmonics cancel exactly.  Only even l contribute:
 
 Default parameters:
     n_max = 8  → radial indices 0 … 7
-    l_min = 4, l_max = 20  → angular levels: l ∈ {4, 6, …, 18}  (8 levels)
-    Output: (8, 8) matrix  → flattened to 64-element vector
+    l_min = 4, l_max = 36  → angular levels: l ∈ {4, 6, …, 34}  (16 levels)
+    Output: (8, 16) matrix  → flattened to 128-element vector
             axis-0 = radial index n
             axis-1 = angular level index
 
@@ -59,7 +59,7 @@ class RinseParams:
     n_max:
         Number of radial basis functions (n = 0 … n_max-1).  Default 8.
     l_max:
-        Maximum ℓ value (exclusive).  Default 20.
+        Maximum ℓ value (exclusive).  Default 36.
         When ``include_odd_l=False`` (default), angular levels are the even
         values ℓ ∈ {l_min, l_min+2, …, l_max-2} and l_min/l_max must be even.
         When ``include_odd_l=True``, all integers ℓ ∈ {l_min, …, l_max-1}
@@ -86,7 +86,7 @@ class RinseParams:
         flat 1-D vector of length ``n_max * n_l_levels``.  If *False*, returns
         the 2-D ``(n_max, n_l_levels)`` matrix.
     sin_theta_over_lambda_max:
-        Resolution cutoff.  Default 0.5 Å⁻¹ → |G| ≤ 1.0 Å⁻¹.
+        Resolution cutoff.  Default 0.35 Å⁻¹ → |G| ≤ 0.70 Å⁻¹.
     radial_basis:
         ``"chebyshev"`` , ``"bessel"`` or
         ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
@@ -111,11 +111,12 @@ class RinseParams:
         isotropic Debye-Waller factor.
     intensity_falloff_u_iso:
         Average isotropic displacement parameter in Å² for Debye-Waller falloff.
-        Default 0.05.
-    use_reported_adps:
-        If *True* (default), use displacement parameters as reported in the CIF
-        (isotropic or anisotropic). If *False*, all atoms are assigned isotropic
-        thermal motion with U_iso = 0.05 Å².
+        Default 0.0.
+    set_fixed_uiso:
+        If *None* (default), use displacement parameters as reported in the CIF
+        (isotropic or anisotropic). If a float, discard the reported ADPs and
+        assign all atoms isotropic thermal motion with U_iso = ``set_fixed_uiso``
+        Å².
     monopole_normalisation:
         If *True* (default), divide each radial level's angular power
         ``p(n, ℓ)`` by that level's monopole (ℓ=0) power ``p(n, 0)``.  The
@@ -130,10 +131,10 @@ class RinseParams:
     """
 
     n_max: int = 8
-    l_max: int = 20
+    l_max: int = 36
     l_min: int = 4
     include_odd_l: bool = False
-    sin_theta_over_lambda_max: float = 0.5
+    sin_theta_over_lambda_max: float = 0.35
     radial_basis: RadialBasisType = "smooth_shells_nl"
     intensity_normalisation: (
         IntensityNormalisation | Literal["none", "double_exponential", "empirical"]
@@ -141,8 +142,8 @@ class RinseParams:
     intensity_normalisation_n_bins: int | None = None
     intensity_normalisation_min_bin_size: int | None = None
     intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "none"
-    intensity_falloff_u_iso: float = 0.05
-    use_reported_adps: bool = True
+    intensity_falloff_u_iso: float = 0.0
+    set_fixed_uiso: float | None = None
     monopole_normalisation: bool = True
     log1p: bool = False
     l2: bool = True

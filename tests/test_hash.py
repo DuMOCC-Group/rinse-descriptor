@@ -219,7 +219,7 @@ class TestBlocklist:
     def test_no_blocked_substring_in_hash_output(self) -> None:
         rng = np.random.default_rng(42)
         for _ in range(200):
-            vec = rng.standard_normal(64)
+            vec = rng.standard_normal(128)
             words = descriptor_hash(vec, n_words=4).split("-")
             for word in words:
                 for sub in _BLOCKED_SUBSTRINGS:

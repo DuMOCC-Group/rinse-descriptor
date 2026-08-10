@@ -201,11 +201,15 @@ def _smooth_shell_basis_nl(
     q_max: float,
     n_max: int,
 ) -> NDArray[np.float64]:
-    """Smooth overlapping radial shells with width-based normalisation.
+    """Smooth overlapping radial shells with volume-based normalisation.
 
     Shell means are uniformly spaced in spherical-volume coordinate
     u = (q/q_max)^3, giving non-linear spacing in q.  Shell widths follow
-    local shell thickness and each Gaussian is scaled by 1/σ_n.
+    local shell thickness.  Each Gaussian is scaled by 1/(σ_n · c_n²) so that
+    its integral against the reciprocal-space volume element (∝ q² dq) is the
+    same for every shell.  Because equal-volume shells then contribute equally
+    for a flat (resolution-independent) intensity field, the ℓ=0 monopole
+    varies only with the intensity envelope, not with shell geometry.
     """
     q_clipped = np.clip(q, 0.0, q_max)
     M = q_clipped.shape[0]
@@ -227,6 +231,10 @@ def _smooth_shell_basis_nl(
     sigma = np.maximum(widths, np.finfo(np.float64).tiny)
 
     scaled = (q_clipped[:, np.newaxis] - centers[np.newaxis, :]) / sigma[np.newaxis, :]
-    # Width-based normalisation: broader shells have proportionally lower peak height.
-    R[:, :] = np.exp(-0.5 * scaled**2) / sigma[np.newaxis, :]
+    # Volume-based normalisation: the q²-weighted integral of each Gaussian is
+    # constant across shells.  Peak height ∝ 1/(σ_n · c_n²): thinner *and* more
+    # distant shells (which cover more reciprocal-space surface at ∝ q²) are
+    # scaled down so equal-volume shells contribute equally for flat intensity.
+    norm = sigma[np.newaxis, :] * (centers[np.newaxis, :] ** 2)
+    R[:, :] = np.exp(-0.5 * scaled**2) / np.maximum(norm, np.finfo(np.float64).tiny)
     return R

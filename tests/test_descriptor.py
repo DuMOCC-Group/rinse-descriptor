@@ -7,7 +7,7 @@ Structures tested:
   - 1-Methylpiperazinium oxalate dihydrate
 
 Properties verified:
-  - Descriptor shape: 64 elements by default (flat 1-D), (8, 8) when flatten=False
+  - Descriptor shape: 128 elements by default (flat 1-D), (8, 16) when flatten=False
   - Consistency: two calls with identical input return identical output
   - Non-negativity
   - Atom substitution sensitivity
@@ -160,9 +160,9 @@ class TestStructureFactors:
         assert RinseParams().intensity_normalisation == "none"
         assert RinseParams().intensity_falloff == "none"
         assert RinseParams().monopole_normalisation is True
-        assert RinseParams().sin_theta_over_lambda_max == 0.5
-        assert RinseParams().intensity_falloff_u_iso == 0.05
-        assert RinseParams().use_reported_adps is True
+        assert RinseParams().sin_theta_over_lambda_max == 0.35
+        assert RinseParams().intensity_falloff_u_iso == 0.0
+        assert RinseParams().set_fixed_uiso is None
 
         refls_default = compute_structure_factors(
             ylid,
@@ -336,14 +336,14 @@ loop_
             sin_theta_over_lambda_max=0.5,
             form_factor_type="xray",
             intensity_normalisation="none",
-            use_reported_adps=False,
+            set_fixed_uiso=0.05,
         )
         r05 = compute_structure_factors(
             xrs05,
             sin_theta_over_lambda_max=0.5,
             form_factor_type="xray",
             intensity_normalisation="none",
-            use_reported_adps=False,
+            set_fixed_uiso=0.05,
         )
 
         # For a single atom at the origin, occupancy scales amplitudes linearly,
@@ -402,7 +402,7 @@ loop_
             xrs,
             sin_theta_over_lambda_max=0.5,
             form_factor_type="xray",
-            use_reported_adps=True,
+            set_fixed_uiso=None,
         )
         np.testing.assert_allclose(refls.intensities, refls_explicit.intensities)
 
@@ -411,14 +411,14 @@ loop_
             sin_theta_over_lambda_max=0.5,
             form_factor_type="xray",
             intensity_normalisation="none",
-            use_reported_adps=False,
+            set_fixed_uiso=0.05,
         )
         refls_reported_u = compute_structure_factors(
             xrs,
             sin_theta_over_lambda_max=0.5,
             form_factor_type="xray",
             intensity_normalisation="none",
-            use_reported_adps=True,
+            set_fixed_uiso=None,
         )
         assert not np.allclose(refls_fixed_u.intensities, refls_reported_u.intensities)
 
