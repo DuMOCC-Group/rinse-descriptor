@@ -68,7 +68,7 @@ def radial_basis_q_max(
     if n_max <= 0:
         return 0.0
     if basis == "smooth_shells_nl":
-        return float(radial_scale) * float(n_max) ** (1.0 / 3.0)
+        return float(float(radial_scale) * float(n_max) ** (1.0 / 3.0))
     elif basis == "smooth_shells_cw":
         return float(radial_scale) * float(max(n_max - 1, 1))
     else:
