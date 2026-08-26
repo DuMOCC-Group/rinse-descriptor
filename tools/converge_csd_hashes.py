@@ -30,7 +30,7 @@ DEFAULT_FINAL_OUTPUT = (
 if str(REPO_ROOT / "python") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "python"))
 
-from rinse_descriptor import descriptor_hash
+from rinse_descriptor import descriptor_hash  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
@@ -95,7 +95,10 @@ def _parse_args() -> argparse.Namespace:
         "--work-dir",
         type=Path,
         default=DEFAULT_WORK_DIR,
-        help=f"Directory for chunk outputs and intermediate PCA files (default: {DEFAULT_WORK_DIR})",
+        help=(
+            "Directory for chunk outputs and intermediate PCA files "
+            f"(default: {DEFAULT_WORK_DIR})"
+        ),
     )
     parser.add_argument(
         "--final-output",
@@ -131,7 +134,9 @@ def _load_chunk(chunk_pickle: Path) -> tuple[list[str], list[object]]:
     return list(refcodes), list(descriptors)
 
 
-def _write_merged_pickle(path: Path, refcodes: Sequence[str], descriptors: Sequence[object]) -> None:
+def _write_merged_pickle(
+    path: Path, refcodes: Sequence[str], descriptors: Sequence[object]
+) -> None:
     with path.open("wb") as handle:
         pickle.dump((list(refcodes), list(descriptors)), handle)
 
@@ -153,7 +158,10 @@ def _count_hash_changes(
 ) -> int | None:
     if previous_hashes is None:
         return None
-    return sum(previous_hashes.get(refcode) != hash_str for refcode, hash_str in current_hashes.items())
+    return sum(
+        previous_hashes.get(refcode) != hash_str
+        for refcode, hash_str in current_hashes.items()
+    )
 
 
 def _write_history(path: Path, rows: Sequence[dict[str, str]]) -> None:

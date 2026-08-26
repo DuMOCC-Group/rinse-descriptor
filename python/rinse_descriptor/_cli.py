@@ -69,16 +69,19 @@ def _make_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--radial-basis",
         default=defaults.radial_basis,
-        choices=["smooth_shells_nl", "smooth_shells_cw", "chebyshev", "bessel"],
+        choices=["smooth_shells_nl", "smooth_shells_cw"],
         help="Radial basis type.",
     )
     p.add_argument(
-        "--stol",
+        "--radial-scale",
         type=float,
-        default=defaults.sin_theta_over_lambda_max,
-        metavar="STOL",
-        dest="sin_theta_over_lambda_max",
-        help="sin(θ)/λ resolution cutoff in Å⁻¹.",
+        default=defaults.radial_scale,
+        metavar="S",
+        dest="radial_scale",
+        help=(
+            "Per-shell scale factor in Å⁻¹.  Sets the distance between radial "
+            "shells; the resolution cutoff is derived from this and --n-max."
+        ),
     )
     p.add_argument(
         "--include-odd-l",
@@ -243,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             l_max=args.l_max,
             l_min=args.l_min,
             include_odd_l=args.include_odd_l,
-            sin_theta_over_lambda_max=args.sin_theta_over_lambda_max,
+            radial_scale=args.radial_scale,
             radial_basis=args.radial_basis,
             intensity_normalisation=args.intensity_normalisation,
             intensity_normalisation_n_bins=args.intensity_normalisation_bins,

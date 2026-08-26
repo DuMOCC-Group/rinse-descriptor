@@ -25,7 +25,7 @@ def params_default():
 
 @pytest.fixture(scope="module")
 def params_small():
-    return RinseParams(n_max=8, l_max=8, sin_theta_over_lambda_max=1.0)
+    return RinseParams(n_max=8, l_max=8, radial_scale=1.0)
 
 
 def test_benchmark_nacl_unit(benchmark, nacl_unit, params_default):

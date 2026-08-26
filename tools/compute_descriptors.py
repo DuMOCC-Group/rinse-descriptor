@@ -33,7 +33,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from rinse_descriptor import RinseParams, descriptor, load_cif, load_res
 
 Record = dict[str, Any]
@@ -153,7 +152,11 @@ def main() -> None:
     records = _load_records(input_path)
     total = len(records)
 
-    pending = [i for i, r in enumerate(records) if not _is_done(r, args.retry_failed, args.recompute_all)]
+    pending = [
+        i
+        for i, r in enumerate(records)
+        if not _is_done(r, args.retry_failed, args.recompute_all)
+    ]
     already = total - len(pending)
     print(
         f"Loaded {total} records; {already} already have descriptors, "

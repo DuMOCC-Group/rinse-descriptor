@@ -116,10 +116,10 @@ print(x.shape)  # (128,)
 from rinse_descriptor import RinseParams, descriptor
 
 params = RinseParams(
-    n_max=8,                       # radial basis order (n = 0 … 7)
+    n_max=8,                       # radial shells (n = 0 … 7)
     l_max=36,                       # angular levels (gives l = 4,6,...,34 by default)
-    sin_theta_over_lambda_max=0.6,  # resolution cutoff in Å⁻¹
-    radial_basis="chebyshev",       # or "bessel" / "smooth_shells_cw" / "smooth_shells_nl"
+    radial_scale=0.35,              # per-shell scale in Å⁻¹ (resolution cutoff is derived)
+    radial_basis="smooth_shells_nl",  # or "smooth_shells_cw"
     monopole_normalisation=False,    # optional: disable the default monopole (ℓ=0) envelope removal
     intensity_normalisation="double_exponential",  # optional reflection-level envelope removal (off by default)
 )
@@ -245,7 +245,7 @@ rinse-descriptor/
 │   ├── __init__.py        # Public API: descriptor(), descriptor_many(), descriptor_hash(), hash_to_bits()
 │   ├── _crystal.py        # CIF loading into cctbx xray.structure objects
 │   ├── _structure_factors.py  # cctbx structure factor calculation
-│   ├── _radial_basis.py   # Chebyshev / Bessel / smooth-shell radial bases
+│   ├── _radial_basis.py   # smooth-shell radial bases (index-anchored)
 │   ├── _descriptor.py     # Power spectrum computation
 │   ├── _hash.py           # Locality-sensitive hashing via PCA-based SimHash
 │   └── data/

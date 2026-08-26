@@ -42,7 +42,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from ._radial_basis import RadialBasisType, evaluate_radial_basis
+from ._radial_basis import RadialBasisType, evaluate_radial_basis, radial_basis_q_max
 from ._structure_factors import IntensityFalloff, IntensityNormalisation, ReflectionList
 
 # ---------------------------------------------------------------------------
@@ -85,11 +85,15 @@ class RinseParams:
         If *True* (default), :func:`~rinse_descriptor.descriptor` returns a
         flat 1-D vector of length ``n_max * n_l_levels``.  If *False*, returns
         the 2-D ``(n_max, n_l_levels)`` matrix.
-    sin_theta_over_lambda_max:
-        Resolution cutoff.  Default 0.35 Å⁻¹ → |G| ≤ 0.70 Å⁻¹.
+    radial_scale:
+        Per-shell scale factor in Å⁻¹.  Default 0.35.  Sets the distance between
+        radial shells; shell positions are anchored by index and independent of
+        ``n_max``, so increasing ``n_max`` extends the descriptor to higher |G|
+        while leaving the already-computed shells unchanged.  The reciprocal-
+        space cutoff is derived from this and ``n_max`` (see :attr:`q_max` /
+        :attr:`sin_theta_over_lambda_max`).
     radial_basis:
-        ``"chebyshev"`` , ``"bessel"`` or
-        ``"smooth_shells_cw"`` or ``"smooth_shells_nl"``(default).
+        ``"smooth_shells_nl"`` (default) or ``"smooth_shells_cw"``.
     intensity_normalisation:
         Reflection-level resolution-envelope normalisation for the input
         intensities.  ``"none"`` (default) leaves calculated intensities
@@ -134,7 +138,7 @@ class RinseParams:
     l_max: int = 36
     l_min: int = 4
     include_odd_l: bool = False
-    sin_theta_over_lambda_max: float = 0.35
+    radial_scale: float = 0.35
     radial_basis: RadialBasisType = "smooth_shells_nl"
     intensity_normalisation: (
         IntensityNormalisation | Literal["none", "double_exponential", "empirical"]
@@ -182,8 +186,17 @@ class RinseParams:
 
     @property
     def q_max(self) -> float:
-        """|G| cutoff in Å⁻¹."""
-        return 2.0 * self.sin_theta_over_lambda_max
+        """|G| cutoff in Å⁻¹, derived from ``radial_scale``, ``n_max`` and basis."""
+        return radial_basis_q_max(self.radial_scale, self.n_max, self.radial_basis)
+
+    @property
+    def sin_theta_over_lambda_max(self) -> float:
+        """Derived sin(θ)/λ resolution cutoff in Å⁻¹ (diagnostic).
+
+        Equal to ``q_max / 2``; this is the resolution at which reflections are
+        computed for the current shell layout.
+        """
+        return 0.5 * self.q_max
 
     @property
     def l_values(self) -> list[int]:
@@ -405,7 +418,7 @@ def compute_power_spectrum(
     _t = time.perf_counter()
     R = evaluate_radial_basis(
         q,
-        q_max=params.q_max,
+        radial_scale=params.radial_scale,
         n_max=params.n_max,
         basis=params.radial_basis,
     )  # (M, n_max)

@@ -99,9 +99,7 @@ def _(mo):
     The smooth_shells_nl seems to work well, equally weighting
     all parts of reciprocal space in a predictable way.
     smooth_shells_cw (with high n_max) can be used to generate
-    a quasi powder pattern at each multipole level. Chebyshev
-    and Bessel (0th order) functions are included because they
-    are well behaved but seem to give less useful descriptors.
+    a quasi powder pattern at each multipole level.
 
     X-ray form factors really the only sensible option.
     Others are included just for comparison.
@@ -117,10 +115,12 @@ def _(mo):
     octopole...) are always zero because of Friedel's law,
     at least for centrosymmetric structures.
 
-    sin_theta_over_lambda_max controls how far out strucure
-    factors are calculated. This is generally the slowest step.
-    0.6 is atomic resolution, and this should be more than enough.
-    It may be justfied to reduce this.
+    radial_scale sets the distance between radial shells. Shell
+    positions are anchored by index, so increasing n_max extends
+    the descriptor to higher |G| while leaving the already-computed
+    shells unchanged. The resolution cutoff (how far out structure
+    factors are calculated — generally the slowest step) is derived
+    from radial_scale and n_max; sin(θ)/λ_max is shown for diagnostics.
 
     Monopole (ℓ=0) normalisation is the default resolution-envelope removal:
     each radial level's angular power p(n, ℓ) is divided by its monopole power
@@ -174,16 +174,16 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         label="l_min  (first angular level included, ℓ ≥ l_min)",
         show_value=True,
     )
-    stol_slider = mo.ui.slider(
-        start=0.1,
-        stop=2.0,
-        step=0.1,
-        value=_defaults["sin_theta_over_lambda_max"],
-        label="sin(θ)/λ_max  (Å⁻¹)  →  |G|_max = 2 × this value",
+    radial_scale_slider = mo.ui.slider(
+        start=0.05,
+        stop=1.0,
+        step=0.05,
+        value=_defaults["radial_scale"],
+        label="radial_scale  (Å⁻¹)  — spacing of the radial shells",
         show_value=True,
     )
     basis_dd = mo.ui.dropdown(
-        options=["chebyshev", "bessel", "smooth_shells_cw", "smooth_shells_nl"],
+        options=["smooth_shells_cw", "smooth_shells_nl"],
         value="smooth_shells_nl",  # matches the library default
         label="Radial basis",
     )
@@ -227,7 +227,10 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
     )
     mo.hstack(
         [
-            mo.vstack([n_max_slider, l_max_slider, l_min_slider, stol_slider], gap="0.6rem"),
+            mo.vstack(
+                [n_max_slider, l_max_slider, l_min_slider, radial_scale_slider],
+                gap="0.6rem",
+            ),
             mo.vstack(
                 [
                     basis_dd,
@@ -261,7 +264,7 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         monopole_norm_cb,
         n_max_slider,
         n_words_slider,
-        stol_slider,
+        radial_scale_slider,
     )
 
 
@@ -303,7 +306,7 @@ def _(
     monopole_norm_cb,
     n_max_slider,
     power_spectrum_to_vector,
-    stol_slider,
+    radial_scale_slider,
 ):
     import os
     import tempfile
@@ -340,7 +343,7 @@ def _(
                 l_max=l_max_slider.value,
                 l_min=l_min_slider.value,
                 include_odd_l=include_odd_l_cb.value,
-                sin_theta_over_lambda_max=stol_slider.value,
+                radial_scale=radial_scale_slider.value,
                 radial_basis=basis_dd.value,
                 intensity_normalisation=intensity_norm_dd.value,
                 intensity_falloff=intensity_falloff_dd.value,
@@ -352,7 +355,7 @@ def _(
             )
             _refls = compute_structure_factors(
                 _crystal,
-                sin_theta_over_lambda_max=stol_slider.value,
+                sin_theta_over_lambda_max=_params.sin_theta_over_lambda_max,
                 form_factor_type=ff_dd.value,
                 structure_factor_type="F2",
                 intensity_normalisation=intensity_norm_dd.value,
@@ -489,21 +492,23 @@ def _(mo):
     ## Radial basis functions
 
     The basis functions $R_n(q)$ are evaluated over $q \in [0, q_{max}]$
-    using the current **n_max**, **sin(θ)/λ_max**, and **radial basis** settings.
+    using the current **n_max**, **radial_scale**, and **radial basis** settings.
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(basis_dd, n_max_slider, np, plt, stol_slider):
+def _(basis_dd, n_max_slider, np, plt, radial_scale_slider):
     from rinse_descriptor._radial_basis import evaluate_radial_basis as _eval_basis
+    from rinse_descriptor._radial_basis import radial_basis_q_max as _basis_q_max
 
-    _q_max = 2.0 * stol_slider.value
+    _radial_scale = radial_scale_slider.value
     _n_max = n_max_slider.value
     _basis = basis_dd.value
+    _q_max = _basis_q_max(_radial_scale, _n_max, _basis)
 
     _q = np.linspace(0.0, _q_max, 500)
-    _R = _eval_basis(_q, q_max=_q_max, n_max=_n_max, basis=_basis)  # (500, n_max)
+    _R = _eval_basis(_q, radial_scale=_radial_scale, n_max=_n_max, basis=_basis)  # (500, n_max)
 
     # Choose a colour palette that works for up to 32 curves
     _cmap_rb = plt.get_cmap("turbo")
@@ -984,7 +989,7 @@ def _(
     n_max_slider,
     os,
     power_spectrum_to_vector,
-    stol_slider,
+    radial_scale_slider,
     tempfile,
 ):
     _crystal = None
@@ -1018,7 +1023,7 @@ def _(
                 l_max=l_max_slider.value,
                 l_min=l_min_slider.value,
                 include_odd_l=include_odd_l_cb.value,
-                sin_theta_over_lambda_max=stol_slider.value,
+                radial_scale=radial_scale_slider.value,
                 radial_basis=basis_dd.value,
                 intensity_normalisation=intensity_norm_dd.value,
                 intensity_falloff=intensity_falloff_dd.value,
@@ -1030,7 +1035,7 @@ def _(
             )
             _refls = compute_structure_factors(
                 _crystal,
-                sin_theta_over_lambda_max=stol_slider.value,
+                sin_theta_over_lambda_max=_params.sin_theta_over_lambda_max,
                 form_factor_type=ff_dd.value,
                 structure_factor_type="F2",
                 intensity_normalisation=intensity_norm_dd.value,

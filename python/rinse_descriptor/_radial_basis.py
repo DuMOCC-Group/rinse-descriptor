@@ -1,29 +1,27 @@
 """Radial basis functions for the RINSE descriptor.
 
+Shells are *anchored by index* through a single ``radial_scale`` factor rather
+than being stretched to fill a ``[0, q_max]`` window.  This means the position
+of shell *n* is fixed regardless of ``n_max``: increasing ``n_max`` simply adds
+further shells at higher *q* while leaving the already-computed shells
+unchanged.  The reciprocal-space cutoff ``q_max`` is therefore a *derived*
+quantity (see :func:`radial_basis_q_max`), not an input.
+
 Two families are supported:
 
-``"chebyshev"``
-    Chebyshev polynomials of the first kind, T_n(x), evaluated with the
-    argument mapped from q ∈ [0, q_max] → x ∈ [-1, 1]:
-        x(q) = 2q/q_max - 1
-    Indices n = 0, 1, …, n_max-1.
-
-``"bessel"``
-    A 1-D spherical Bessel j_0 radial basis with modes
-        R_n(q) = j_0(z_n(q)),   z_n(q) = α_n · q / q_max
-    where α_n is the n-th positive root of j_0 (i.e. α_n = nπ).  This gives
-    n_max radial functions that vanish at q = q_max.  The same radial basis
-    is intended to be reused for each angular component in the descriptor.
+``"smooth_shells_nl"`` (default)
+    Volume-uniform overlapping shells.  Shell edges are placed at
+        q_edge(n) = radial_scale · n^(1/3)
+    so every shell spans an equal reciprocal-space volume ∝ radial_scale³.
+    Each shell is a Gaussian scaled so its q²-weighted integral is constant
+    across shells.  ``q_max = radial_scale · n_max^(1/3)``.
 
 ``"smooth_shells_cw"``
-    Smooth overlapping shells over q ∈ [0, q_max], built from Gaussian
-    windows centered at uniformly spaced shell centers.  Rows are
-    normalised so Σ_n R_n(q) = 1 at each q.
-
-``"smooth_shells_nl"``
-    Smooth overlapping shells over q ∈ [0, q_max], built from Gaussian
-    windows centered at non-linearly spaced shell centers.  Rows are
-    normalised so Σ_n R_n(q) = 1 at each q.
+    Linearly-spaced overlapping shells with partition-of-unity normalisation.
+    Shell centers are placed at
+        q_center(n) = radial_scale · n,
+    the Gaussian width equals ``radial_scale``, and rows are normalised so
+    Σ_n R_n(q) = 1 at each q.  ``q_max = radial_scale · (n_max - 1)``.
 
 Both bases return an (M, n_max) array for M query points.
 """
@@ -34,23 +32,57 @@ from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.special import spherical_jn
 
 RadialBasisType = Literal[
-    "chebyshev",
-    "bessel",
     "smooth_shells_cw",
     "smooth_shells_nl",
     "",
 ]
 
 
+def radial_basis_q_max(
+    radial_scale: float,
+    n_max: int,
+    basis: RadialBasisType = "smooth_shells_nl",
+) -> float:
+    """Derived reciprocal-space cutoff |G|_max for a given shell layout.
+
+    This is the outer edge of the shells implied by ``radial_scale`` and
+    ``n_max``.  It grows with ``n_max`` while leaving inner shells fixed.
+
+    Parameters
+    ----------
+    radial_scale:
+        Per-shell scale factor in Å⁻¹.
+    n_max:
+        Number of radial shells (n = 0 … n_max-1).
+    basis:
+        ``"smooth_shells_nl"`` (volume-uniform) or ``"smooth_shells_cw"``
+        (linear).
+
+    Returns
+    -------
+    q_max : float
+        |G| cutoff in Å⁻¹.
+    """
+    if n_max <= 0:
+        return 0.0
+    if basis == "smooth_shells_nl":
+        return float(radial_scale) * float(n_max) ** (1.0 / 3.0)
+    elif basis == "smooth_shells_cw":
+        return float(radial_scale) * float(max(n_max - 1, 1))
+    else:
+        raise ValueError(
+            f"Unknown radial basis '{basis}'. Choose 'smooth_shells_cw' or 'smooth_shells_nl'."
+        )
+
+
 def evaluate_radial_basis(
     q: NDArray[np.float64],
     *,
-    q_max: float,
+    radial_scale: float,
     n_max: int = 8,
-    basis: RadialBasisType = "chebyshev",
+    basis: RadialBasisType = "smooth_shells_nl",
 ) -> NDArray[np.float64]:
     """Evaluate radial basis functions at reciprocal-space magnitudes *q*.
 
@@ -58,13 +90,13 @@ def evaluate_radial_basis(
     ----------
     q:
         (M,) array of |G| values in Å⁻¹.
-    q_max:
-        Cutoff radius in Å⁻¹.  Values outside [0, q_max] are clamped.
+    radial_scale:
+        Per-shell scale factor in Å⁻¹.  Sets the distance between shells;
+        shell positions are anchored by index and independent of ``n_max``.
     n_max:
         Number of radial basis functions (n = 0 … n_max-1).
     basis:
-        ``"chebyshev"``, ``"bessel"``, or
-        ``"smooth_shells_cw"``/``"smooth_shells_nl"``.
+        ``"smooth_shells_nl"`` (default) or ``"smooth_shells_cw"``.
 
     Returns
     -------
@@ -72,89 +104,14 @@ def evaluate_radial_basis(
         R[i, n] = R_n(q[i]).
     """
     q = np.asarray(q, dtype=np.float64)
-    if basis == "chebyshev":
-        return _chebyshev_basis(q, q_max=q_max, n_max=n_max)
-    elif basis in {"bessel"}:
-        return _bessel_basis(q, q_max=q_max, n_max=n_max)
-    elif basis == "smooth_shells_cw":
-        return _smooth_shell_basis_cw(q, q_max=q_max, n_max=n_max)
+    if basis == "smooth_shells_cw":
+        return _smooth_shell_basis_cw(q, radial_scale=radial_scale, n_max=n_max)
     elif basis == "smooth_shells_nl":
-        return _smooth_shell_basis_nl(q, q_max=q_max, n_max=n_max)
+        return _smooth_shell_basis_nl(q, radial_scale=radial_scale, n_max=n_max)
     else:
         raise ValueError(
-            f"Unknown radial basis '{basis}'. "
-            "Choose 'chebyshev', 'bessel', or "
-            "'smooth_shells_cw'/'smooth_shells_nl'."
+            f"Unknown radial basis '{basis}'. Choose 'smooth_shells_cw' or 'smooth_shells_nl'."
         )
-
-
-# ---------------------------------------------------------------------------
-# Chebyshev basis
-# ---------------------------------------------------------------------------
-
-
-def _chebyshev_basis(
-    q: NDArray[np.float64],
-    *,
-    q_max: float,
-    n_max: int,
-) -> NDArray[np.float64]:
-    """Chebyshev T_n basis evaluated via the three-term recurrence.
-
-    Maps q ∈ [0, q_max] → x ∈ [-1, 1] as x = 2q/q_max - 1,
-    so that x = -1 at q = 0 and x = 1 at q = q_max.
-    """
-    x = np.clip(2.0 * q / q_max - 1.0, -1.0, 1.0)  # (M,)
-    M = x.shape[0]
-    R = np.empty((M, n_max), dtype=np.float64)
-
-    if n_max == 0:
-        return R
-
-    # Three-term recurrence: T_0 = 1, T_1 = x, T_{n+1} = 2x T_n - T_{n-1}
-    R[:, 0] = 1.0
-    if n_max == 1:
-        return R
-    R[:, 1] = x
-    for n in range(2, n_max):
-        R[:, n] = 2.0 * x * R[:, n - 1] - R[:, n - 2]
-
-    return R
-
-
-# ---------------------------------------------------------------------------
-# Spherical Bessel radial basis
-# ---------------------------------------------------------------------------
-
-# Use the spherical Bessel function j_0 as a 1-D radial basis.
-# We vary the radial mode index n through successive roots α_n = n*π,
-# giving
-#   R_n(q) = j_0(α_n * q / q_max)  for n = 1 … n_max
-# so every radial function vanishes at q = q_max.  These radial functions
-# are shared across angular channels rather than changing Bessel order.
-#
-# Index mapping: basis index 0 → α_1 = π, …, n-1 → α_n = n*π
-
-
-def _bessel_basis(
-    q: NDArray[np.float64],
-    *,
-    q_max: float,
-    n_max: int,
-) -> NDArray[np.float64]:
-    """Evaluate 1-D spherical Bessel j_0 radial modes on [0, q_max]."""
-    q_clipped = np.clip(q, 0.0, q_max)
-    M = q_clipped.shape[0]
-    R = np.empty((M, n_max), dtype=np.float64)
-
-    for i in range(n_max):
-        # Radial mode n = i+1 uses the corresponding j_0 root alpha = n*pi.
-        alpha = (i + 1) * np.pi
-        z = alpha * q_clipped / q_max  # dimensionless Bessel argument, shape (M,)
-        # j_0(z) = sin(z)/z, but use scipy for numerical safety at z=0.
-        R[:, i] = spherical_jn(0, z)
-
-    return R
 
 
 # ---------------------------------------------------------------------------
@@ -165,15 +122,16 @@ def _bessel_basis(
 def _smooth_shell_basis_cw(
     q: NDArray[np.float64],
     *,
-    q_max: float,
+    radial_scale: float,
     n_max: int,
 ) -> NDArray[np.float64]:
     """Smooth overlapping radial shells with partition-of-unity normalisation.
 
-    Shell centers are uniformly spaced on [0, q_max].  Each shell is a
-    Gaussian in q, and rows are normalised so the basis sums to 1 at each q.
+    Shell centers are anchored at ``q_center(n) = radial_scale · n``.  Each
+    shell is a Gaussian of width ``radial_scale`` in q, and rows are normalised
+    so the basis sums to 1 at each q.
     """
-    q_clipped = np.clip(q, 0.0, q_max)
+    q_clipped = np.maximum(q, 0.0)
     M = q_clipped.shape[0]
     R = np.empty((M, n_max), dtype=np.float64)
 
@@ -183,9 +141,8 @@ def _smooth_shell_basis_cw(
         R[:, 0] = 1.0
         return R
 
-    centers = np.linspace(0.0, q_max, n_max, dtype=np.float64)
-    spacing = q_max / (n_max - 1)
-    sigma = spacing
+    centers = radial_scale * np.arange(n_max, dtype=np.float64)
+    sigma = radial_scale
 
     scaled = (q_clipped[:, np.newaxis] - centers[np.newaxis, :]) / sigma
     R[:, :] = np.exp(-0.5 * scaled**2)
@@ -198,20 +155,22 @@ def _smooth_shell_basis_cw(
 def _smooth_shell_basis_nl(
     q: NDArray[np.float64],
     *,
-    q_max: float,
+    radial_scale: float,
     n_max: int,
 ) -> NDArray[np.float64]:
     """Smooth overlapping radial shells with volume-based normalisation.
 
-    Shell means are uniformly spaced in spherical-volume coordinate
-    u = (q/q_max)^3, giving non-linear spacing in q.  Shell widths follow
-    local shell thickness.  Each Gaussian is scaled by 1/(σ_n · c_n²) so that
-    its integral against the reciprocal-space volume element (∝ q² dq) is the
-    same for every shell.  Because equal-volume shells then contribute equally
-    for a flat (resolution-independent) intensity field, the ℓ=0 monopole
-    varies only with the intensity envelope, not with shell geometry.
+    Shell edges are anchored at ``q_edge(n) = radial_scale · n^(1/3)``, so each
+    shell spans an equal reciprocal-space volume ∝ radial_scale³ regardless of
+    ``n_max``.  Shell centers are the volume-midpoints
+    ``q_center(n) = radial_scale · (n + 1/2)^(1/3)`` and widths follow the local
+    shell thickness.  Each Gaussian is scaled by 1/(σ_n · c_n²) so that its
+    integral against the reciprocal-space volume element (∝ q² dq) is the same
+    for every shell.  Because equal-volume shells then contribute equally for a
+    flat (resolution-independent) intensity field, the ℓ=0 monopole varies only
+    with the intensity envelope, not with shell geometry.
     """
-    q_clipped = np.clip(q, 0.0, q_max)
+    q_clipped = np.maximum(q, 0.0)
     M = q_clipped.shape[0]
     R = np.empty((M, n_max), dtype=np.float64)
 
@@ -221,12 +180,10 @@ def _smooth_shell_basis_nl(
         R[:, 0] = 1.0
         return R
 
-    # Partition shells uniformly in spherical-volume coordinate u = (q/q_max)^3.
-    u_edges = np.linspace(0.0, 1.0, n_max + 1, dtype=np.float64)
-    q_edges = q_max * np.cbrt(u_edges)
-
-    u_centers = 0.5 * (u_edges[:-1] + u_edges[1:])
-    centers = q_max * np.cbrt(u_centers)
+    # Anchor shells by index in the spherical-volume coordinate u = (q/scale)^3:
+    # edge n sits at u = n, i.e. q_edge(n) = radial_scale · n^(1/3).
+    q_edges = radial_scale * np.cbrt(np.arange(n_max + 1, dtype=np.float64))
+    centers = radial_scale * np.cbrt(np.arange(n_max, dtype=np.float64) + 0.5)
     widths = q_edges[1:] - q_edges[:-1]
     sigma = np.maximum(widths, np.finfo(np.float64).tiny)
 

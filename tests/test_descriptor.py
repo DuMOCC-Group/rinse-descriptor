@@ -48,7 +48,7 @@ def ylid():
 @pytest.fixture(scope="module")
 def params() -> RinseParams:
     # Use small n_max/l_max for speed in unit tests; flatten=False for shape comparisons
-    return RinseParams(n_max=8, l_max=8, sin_theta_over_lambda_max=1.0, flatten=False)
+    return RinseParams(n_max=8, l_max=8, radial_scale=1.0, flatten=False)
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +440,7 @@ class TestAdditionalInvariances:
         params = RinseParams(
             n_max=8,
             l_max=8,
-            sin_theta_over_lambda_max=1.0,
+            radial_scale=1.0,
             flatten=False,
         )
         reflections = compute_structure_factors(
@@ -467,7 +467,7 @@ class TestAdditionalInvariances:
         params = RinseParams(
             n_max=8,
             l_max=8,
-            sin_theta_over_lambda_max=1.0,
+            radial_scale=1.0,
             flatten=False,
             log1p=False,
         )
@@ -494,7 +494,7 @@ class TestAdditionalInvariances:
         params = RinseParams(
             n_max=8,
             l_max=8,
-            sin_theta_over_lambda_max=1.0,
+            radial_scale=1.0,
             flatten=False,
         )
         # NaCl and Si are chemically distinct: their xray descriptors must differ.

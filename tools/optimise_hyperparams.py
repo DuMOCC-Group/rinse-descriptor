@@ -40,7 +40,7 @@ Usage:
     uv run tools/optimise_hyperparams.py --n-trials 200 --n-folds 5
     uv run tools/optimise_hyperparams.py --jobs 8   # parallel descriptor computation
     uv run tools/optimise_hyperparams.py \
-        --eval-params n_max=16,l_min=4,l_max=20,sin_theta_over_lambda_max=0.5
+        --eval-params n_max=16,l_min=4,l_max=20,radial_scale=0.5
         # score one fixed parameter set and add it to the study
         # (key=value avoids shell quoting; a JSON object is also accepted)
     uv run tools/optimise_hyperparams.py --cache-only   # fetch and cache only
@@ -127,15 +127,13 @@ def _build_params(trial: optuna.trial.Trial) -> RinseParams | None:
     l_max = l_min + 2 * n_l_levels
     trial.set_user_attr("l_max", l_max)
 
-    # Resolution range for the descriptor's reciprocal-space cutoff.
-    sin_theta = trial.suggest_float("sin_theta_over_lambda_max", 0.2, 0.6, step=0.05)
+    # Per-shell scale factor for the descriptor's radial shells.
+    radial_scale = trial.suggest_float("radial_scale", 0.2, 0.6, step=0.05)
     radial_basis = trial.suggest_categorical(
         "radial_basis",
         [
-            #"chebyshev",
-            #"bessel",
-            #"smooth_shells_cw",
-            "smooth_shells_nl"
+            # "smooth_shells_cw",
+            "smooth_shells_nl",
         ],
     )
     intensity_norm = trial.suggest_categorical(
@@ -167,7 +165,7 @@ def _build_params(trial: optuna.trial.Trial) -> RinseParams | None:
             n_max=n_max,
             l_max=l_max,
             l_min=l_min,
-            sin_theta_over_lambda_max=sin_theta,
+            radial_scale=radial_scale,
             radial_basis=radial_basis,  # type: ignore[arg-type]
             intensity_normalisation=intensity_norm,  # type: ignore[arg-type]
             intensity_falloff=intensity_falloff,  # type: ignore[arg-type]
@@ -713,7 +711,7 @@ def _print_trial_params(trial: optuna.trial.Trial) -> None:
     print(f"  l_min                     = {trial.params['l_min']}")
     print(f"  l_max (derived)           = {l_max}")
     print(f"  n_l_levels (derived)      = {trial.params['n_l_levels']}")
-    print(f"  sin_theta_over_lambda_max = {trial.params['sin_theta_over_lambda_max']:.4f}")
+    print(f"  radial_scale              = {trial.params['radial_scale']:.4f}")
     print(f"  radial_basis              = {trial.params['radial_basis']!r}")
     print(f"  intensity_normalisation   = {trial.params['intensity_normalisation']!r}")
     print(f"  intensity_falloff         = {trial.params['intensity_falloff']!r}")
@@ -731,7 +729,7 @@ def _params_from_dict(p: dict[str, Any]) -> RinseParams | None:
             n_max=p["n_max"],
             l_max=l_max,
             l_min=l_min,
-            sin_theta_over_lambda_max=p["sin_theta_over_lambda_max"],
+            radial_scale=p["radial_scale"],
             radial_basis=p["radial_basis"],
             intensity_normalisation=p["intensity_normalisation"],
             intensity_falloff=p["intensity_falloff"],
@@ -818,7 +816,7 @@ def _spec_to_trial_params(spec: dict[str, Any]) -> dict[str, Any]:
         "n_max": n_max,
         "l_min": l_min,
         "n_l_levels": n_l_levels,
-        "sin_theta_over_lambda_max": float(spec.get("sin_theta_over_lambda_max", 0.6)),
+        "radial_scale": float(spec.get("radial_scale", 0.35)),
         "radial_basis": spec.get("radial_basis", "smooth_shells_nl"),
         "intensity_normalisation": spec.get(
             "intensity_normalisation", "none"
@@ -1030,7 +1028,7 @@ def main() -> None:
             "instead of running the search. Accepts "
             "either comma-separated key=value pairs (recommended on PowerShell, "
             "no quoting needed) e.g. "
-            "n_max=16,l_min=4,l_max=20,sin_theta_over_lambda_max=0.5 "
+            "n_max=16,l_min=4,l_max=20,radial_scale=0.5 "
             "or a JSON object of RinseParams fields. Omitted fields use defaults; "
             "give either l_max or n_l_levels."
         ),
