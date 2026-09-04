@@ -132,8 +132,8 @@ def _build_params(trial: optuna.trial.Trial) -> RinseParams | None:
     radial_basis = trial.suggest_categorical(
         "radial_basis",
         [
-            # "smooth_shells_cw",
-            "smooth_shells_nl",
+            # "lin_gaussian",
+            "cv_gaussian",
         ],
     )
     log1p = trial.suggest_categorical("log1p", [
@@ -784,7 +784,7 @@ def _spec_to_trial_params(spec: dict[str, Any]) -> dict[str, Any]:
         "l_min": l_min,
         "n_l_levels": n_l_levels,
         "radial_scale": float(spec.get("radial_scale", 0.35)),
-        "radial_basis": spec.get("radial_basis", "smooth_shells_nl"),
+        "radial_basis": spec.get("radial_basis", "cv_gaussian"),
         "log1p": bool(spec.get("log1p", False)),
     }
 

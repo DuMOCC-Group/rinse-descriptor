@@ -158,7 +158,8 @@ class TestNonNegativity:
 class TestStructureFactors:
     def test_default_intensity_handling_is_none(self, ylid: object) -> None:
         assert RinseParams().monopole_normalisation is True
-        assert RinseParams().sin_theta_over_lambda_max == 0.35
+        # Reflections are gathered to qmax_factor (1.2) x q_max; q_max/2 = 0.35.
+        assert RinseParams().sin_theta_over_lambda_max == pytest.approx(0.42)
         assert RinseParams().set_fixed_uiso is None
 
         refls_default = compute_structure_factors(

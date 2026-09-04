@@ -8,14 +8,14 @@ is therefore a derived quantity (see :func:`radial_basis_q_max`), not an input.
 
 Two families are supported:
 
-``"smooth_shells_nl"`` (default)
+``"cv_gaussian"`` (constant volume, default)
     Volume-uniform overlapping shells.  Shell edges are placed at
         q_edge(n) = radial_scale · n^(1/3)
     so every shell spans an equal reciprocal-space volume ∝ radial_scale³.
     Each shell is a Gaussian scaled so its q²-weighted integral is constant
     across shells.  ``q_max = radial_scale · n_max^(1/3)``.
 
-``"smooth_shells_cw"``
+``"lin_gaussian"`` (linear spacing)
     Linearly-spaced overlapping shells with partition-of-unity normalisation.
     Shell centers are placed at
         q_center(n) = radial_scale · n,
@@ -33,8 +33,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 RadialBasisType = Literal[
-    "smooth_shells_cw",
-    "smooth_shells_nl",
+    "cv_gaussian",
+    "lin_gaussian",
     "",
 ]
 
@@ -42,7 +42,7 @@ RadialBasisType = Literal[
 def radial_basis_q_max(
     radial_scale: float,
     n_max: int,
-    basis: RadialBasisType = "smooth_shells_nl",
+    basis: RadialBasisType = "cv_gaussian",
 ) -> float:
     """Derived reciprocal-space cutoff |G|_max for a given shell layout.
 
@@ -56,7 +56,7 @@ def radial_basis_q_max(
     n_max:
         Number of radial shells (n = 0 … n_max-1).
     basis:
-        ``"smooth_shells_nl"`` (volume-uniform) or ``"smooth_shells_cw"``
+        ``"cv_gaussian"`` (volume-uniform) or ``"lin_gaussian"``
         (linear).
 
     Returns
@@ -66,14 +66,12 @@ def radial_basis_q_max(
     """
     if n_max <= 0:
         return 0.0
-    if basis == "smooth_shells_nl":
+    if basis == "cv_gaussian":
         return float(float(radial_scale) * float(n_max) ** (1.0 / 3.0))
-    elif basis == "smooth_shells_cw":
+    elif basis == "lin_gaussian":
         return float(radial_scale) * float(max(n_max - 1, 1))
     else:
-        raise ValueError(
-            f"Unknown radial basis '{basis}'. Choose 'smooth_shells_cw' or 'smooth_shells_nl'."
-        )
+        raise ValueError(f"Unknown radial basis '{basis}'. Choose 'cv_gaussian' or 'lin_gaussian'.")
 
 
 def evaluate_radial_basis(
@@ -81,7 +79,7 @@ def evaluate_radial_basis(
     *,
     radial_scale: float,
     n_max: int = 8,
-    basis: RadialBasisType = "smooth_shells_nl",
+    basis: RadialBasisType = "cv_gaussian",
 ) -> NDArray[np.float64]:
     """Evaluate radial basis functions at reciprocal-space magnitudes *q*.
 
@@ -95,7 +93,7 @@ def evaluate_radial_basis(
     n_max:
         Number of radial basis functions (n = 0 … n_max-1).
     basis:
-        ``"smooth_shells_nl"`` (default) or ``"smooth_shells_cw"``.
+        ``"cv_gaussian"`` (default) or ``"lin_gaussian"``.
 
     Returns
     -------
@@ -103,14 +101,12 @@ def evaluate_radial_basis(
         R[i, n] = R_n(q[i]).
     """
     q = np.asarray(q, dtype=np.float64)
-    if basis == "smooth_shells_cw":
-        return _smooth_shell_basis_cw(q, radial_scale=radial_scale, n_max=n_max)
-    elif basis == "smooth_shells_nl":
-        return _smooth_shell_basis_nl(q, radial_scale=radial_scale, n_max=n_max)
+    if basis == "lin_gaussian":
+        return _lin_gaussian_basis(q, radial_scale=radial_scale, n_max=n_max)
+    elif basis == "cv_gaussian":
+        return _cv_gaussian_basis(q, radial_scale=radial_scale, n_max=n_max)
     else:
-        raise ValueError(
-            f"Unknown radial basis '{basis}'. Choose 'smooth_shells_cw' or 'smooth_shells_nl'."
-        )
+        raise ValueError(f"Unknown radial basis '{basis}'. Choose 'cv_gaussian' or 'lin_gaussian'.")
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +114,7 @@ def evaluate_radial_basis(
 # ---------------------------------------------------------------------------
 
 
-def _smooth_shell_basis_cw(
+def _lin_gaussian_basis(
     q: NDArray[np.float64],
     *,
     radial_scale: float,
@@ -151,7 +147,7 @@ def _smooth_shell_basis_cw(
     return R
 
 
-def _smooth_shell_basis_nl(
+def _cv_gaussian_basis(
     q: NDArray[np.float64],
     *,
     radial_scale: float,

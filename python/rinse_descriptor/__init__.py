@@ -17,13 +17,14 @@ Alternatively pass a structure path directly::
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from collections.abc import Sequence
 from typing import Any, Literal
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 from ._cctbx_import_patch import patch_cctbx_imports
 
@@ -37,6 +38,12 @@ from ._descriptor import (  # noqa: E402
     power_spectrum_to_vector,
 )
 from ._hash import DEFAULT_HASH_WORDS, descriptor_hash, hash_to_bits  # noqa: E402
+from ._measured import (  # noqa: E402
+    MeasuredCompletenessError,
+    load_crystal_symmetry,
+    load_hkl,
+    reflections_from_measured,
+)
 from ._structure_factors import (  # noqa: E402
     FormFactorType,
     ReflectionList,
@@ -66,6 +73,11 @@ __all__ = [
     "normalise_power_spectrum",
     "descriptor",
     "descriptor_many",
+    "descriptor_from_hkl",
+    "load_hkl",
+    "load_crystal_symmetry",
+    "reflections_from_measured",
+    "MeasuredCompletenessError",
     "descriptor_hash",
     "hash_to_bits",
     "DEFAULT_HASH_WORDS",
@@ -207,6 +219,71 @@ def descriptor_many(
         for s in structures
     ]
     return np.stack(results, axis=0)
+
+
+def descriptor_from_hkl(
+    hkl: str | os.PathLike[str] | tuple[ArrayLike, ArrayLike],
+    cell: str | os.PathLike[str] | Sequence[float],
+    *,
+    params: RinseParams | None = None,
+    space_group: str | None = None,
+    max_missing_fraction: float = 0.01,
+    debug: bool = False,
+) -> NDArray[np.float64]:
+    """Compute the RINSE descriptor from a *measured* reflection list.
+
+    This is the model-free alternative to :func:`descriptor`: the descriptor is
+    built directly from experimental intensities rather than from calculated
+    structure factors.
+
+    Parameters
+    ----------
+    hkl:
+        Path to a SHELX-style ``.hkl`` file (records ``h k l I σ``), or a
+        ``(hkl, intensity)`` tuple of array-likes with shapes ``(M, 3)`` and
+        ``(M,)`` (intensity is ``|F|²``).
+    cell:
+        Path to a ``.cif``/``.res``/``.ins`` file providing the unit cell and
+        space group, or a sequence of six cell parameters ``(a, b, c, α, β, γ)``.
+    params:
+        Descriptor hyper-parameters.  Uses :class:`RinseParams` defaults if
+        *None*.  ``params.qmax_factor`` sets how far beyond ``q_max`` the
+        supplied sphere must extend (default 1.2×).
+    space_group:
+        Hermann–Mauguin symbol overriding the space group from *cell* (defaults
+        to ``P 1`` when *cell* is a bare cell).
+    max_missing_fraction:
+        Maximum tolerated fraction of missing (non-absent) reflections before a
+        :class:`MeasuredCompletenessError` is raised.  Default 0.01 (1 %).
+
+    Returns
+    -------
+    ndarray of shape ``(n_max * n_l_levels,)`` [default] or
+    ``(n_max, n_l_levels)`` when ``params.flatten=False``.
+    """
+    if params is None:
+        params = RinseParams()
+
+    if isinstance(hkl, (str, os.PathLike)):
+        indices, intensities, _sigma = load_hkl(hkl)
+    else:
+        raw_indices, raw_intensities = hkl  # (hkl, intensity) array-likes
+        indices = np.asarray(raw_indices)
+        intensities = np.asarray(raw_intensities)
+
+    symmetry = load_crystal_symmetry(cell, space_group=space_group)
+
+    reflections = reflections_from_measured(
+        indices,
+        intensities,
+        symmetry,
+        params=params,
+        max_missing_fraction=max_missing_fraction,
+        debug=debug,
+    )
+
+    P = compute_power_spectrum(reflections, params=params, debug=debug)
+    return power_spectrum_to_vector(P) if params.flatten else P
 
 
 # ---------------------------------------------------------------------------

@@ -95,9 +95,9 @@ def _(mo):
     mo.md("""
     ## Descriptor parameters
     Radial basis has a significant impact on the descriptor.
-    The smooth_shells_nl seems to work well, equally weighting
+    The cv_gaussian seems to work well, equally weighting
     all parts of reciprocal space in a predictable way.
-    smooth_shells_cw (with high n_max) can be used to generate
+    lin_gaussian (with high n_max) can be used to generate
     a quasi powder pattern at each multipole level.
 
     X-ray form factors really the only sensible option.
@@ -171,8 +171,8 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         show_value=True,
     )
     basis_dd = mo.ui.dropdown(
-        options=["smooth_shells_cw", "smooth_shells_nl"],
-        value="smooth_shells_nl",  # matches the library default
+        options=["lin_gaussian", "cv_gaussian"],
+        value="cv_gaussian",  # matches the library default
         label="Radial basis",
     )
     ff_dd = mo.ui.dropdown(

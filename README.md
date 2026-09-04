@@ -117,7 +117,7 @@ params = RinseParams(
     n_max=8,                       # radial shells (n = 0 … 7)
     l_max=36,                       # angular levels (gives l = 4,6,...,34 by default)
     radial_scale=0.35,              # per-shell scale in Å⁻¹ (resolution cutoff is derived)
-    radial_basis="smooth_shells_nl",  # or "smooth_shells_cw"
+    radial_basis="cv_gaussian",  # or "lin_gaussian"
     monopole_normalisation=False,    # optional: disable the default monopole (ℓ=0) envelope removal
 )
 x = descriptor("mystructure.cif", params=params)

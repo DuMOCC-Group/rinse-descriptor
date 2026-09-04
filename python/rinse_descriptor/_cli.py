@@ -41,7 +41,34 @@ def _make_parser() -> argparse.ArgumentParser:
         "input_files",
         nargs="+",
         metavar="INPUT",
-        help="Path(s) to input structure file(s): .cif, .res, .ins.",
+        help="Path(s) to input file(s): a structure (.cif, .res, .ins) or a "
+        "measured reflection list (.hkl). .hkl inputs require --cell.",
+    )
+
+    # --- Measured-data (model-free) path ---
+    meas = p.add_argument_group("measured reflections (.hkl)")
+    meas.add_argument(
+        "--cell",
+        metavar="FILE_OR_PARAMS",
+        default=None,
+        help="Unit cell + space group for .hkl inputs: a path to a "
+        ".cif/.res/.ins file, or six comma-separated cell parameters "
+        "'a,b,c,alpha,beta,gamma'.",
+    )
+    meas.add_argument(
+        "--space-group",
+        metavar="HM",
+        default=None,
+        dest="space_group",
+        help="Hermann-Mauguin space-group symbol overriding the one in --cell.",
+    )
+    meas.add_argument(
+        "--max-missing-fraction",
+        type=float,
+        default=0.01,
+        metavar="F",
+        dest="max_missing_fraction",
+        help="Maximum tolerated fraction of missing reflections for .hkl inputs.",
     )
 
     # --- RinseParams ---
@@ -69,7 +96,7 @@ def _make_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--radial-basis",
         default=defaults.radial_basis,
-        choices=["smooth_shells_nl", "smooth_shells_cw"],
+        choices=["cv_gaussian", "lin_gaussian"],
         help="Radial basis type.",
     )
     p.add_argument(
@@ -179,22 +206,48 @@ def _get_version() -> str:
         return "unknown"
 
 
+def _parse_cell(cell: str) -> str | list[float]:
+    """Interpret the --cell value as six cell params or a file path."""
+    parts = [tok for tok in cell.replace(",", " ").split() if tok]
+    if len(parts) == 6:
+        try:
+            return [float(tok) for tok in parts]
+        except ValueError:
+            pass
+    return cell
+
+
 def _compute_one(
     structure_path: str,
     params: object,
     form_factor_type: Literal["xray", "electron", "neutron"],
     want_hash: bool,
     hash_words: int,
+    *,
+    cell: str | None = None,
+    space_group: str | None = None,
+    max_missing_fraction: float = 0.01,
 ) -> tuple[object, str | None]:
     """Return (array, hash_str|None).  Raises on error."""
-    from . import RinseParams, descriptor, descriptor_hash
+    from . import RinseParams, descriptor, descriptor_from_hkl, descriptor_hash
 
     assert isinstance(params, RinseParams)
-    vec = descriptor(
-        structure_path,
-        params=params,
-        form_factor_type=form_factor_type,
-    )
+    if Path(structure_path).suffix.lower() == ".hkl":
+        if cell is None:
+            raise ValueError("a .hkl input requires --cell (a .cif/.res/.ins file or cell params)")
+        vec = descriptor_from_hkl(
+            structure_path,
+            _parse_cell(cell),
+            params=params,
+            space_group=space_group,
+            max_missing_fraction=max_missing_fraction,
+        )
+    else:
+        vec = descriptor(
+            structure_path,
+            params=params,
+            form_factor_type=form_factor_type,
+        )
     h = descriptor_hash(vec.ravel(), n_words=hash_words) if want_hash else None
     return vec, h
 
@@ -239,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 want_hash=args.hash,
                 hash_words=args.hash_words,
+                cell=args.cell,
+                space_group=args.space_group,
+                max_missing_fraction=args.max_missing_fraction,
             )
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{input_file}: {exc}")

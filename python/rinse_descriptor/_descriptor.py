@@ -91,8 +91,15 @@ class RinseParams:
         while leaving the already-computed shells unchanged.  The reciprocal-
         space cutoff is derived from this and ``n_max`` (see :attr:`q_max` /
         :attr:`sin_theta_over_lambda_max`).
+    qmax_factor:
+        Reflections are gathered out to ``qmax_factor · q_max`` rather than
+        ``q_max`` so that the Gaussian tails of the outermost radial shells are
+        captured (they extend beyond the nominal shell cutoff).  Default 1.2.
+        Governs both the model-based path (resolution of the computed
+        structure factors) and the measured-data path (extent of the required
+        full reflection sphere).  Must be ≥ 1.
     radial_basis:
-        ``"smooth_shells_nl"`` (default) or ``"smooth_shells_cw"``.
+        ``"cv_gaussian"`` (default) or ``"lin_gaussian"``.
     set_fixed_uiso:
         If *None* (default), use displacement parameters as reported in the CIF
         (isotropic or anisotropic). If a float, discard the reported ADPs and
@@ -115,7 +122,8 @@ class RinseParams:
     l_min: int = 4
     include_odd_l: bool = False
     radial_scale: float = 0.35
-    radial_basis: RadialBasisType = "smooth_shells_nl"
+    qmax_factor: float = 1.2
+    radial_basis: RadialBasisType = "cv_gaussian"
     set_fixed_uiso: float | None = None
     monopole_normalisation: bool = True
     log1p: bool = False
@@ -130,6 +138,8 @@ class RinseParams:
                 raise ValueError(f"l_min must be even when include_odd_l=False, got {self.l_min}")
         if self.l_min >= self.l_max:
             raise ValueError(f"l_min ({self.l_min}) must be less than l_max ({self.l_max})")
+        if self.qmax_factor < 1.0:
+            raise ValueError(f"qmax_factor must be ≥ 1, got {self.qmax_factor}")
 
     @property
     def q_max(self) -> float:
@@ -137,13 +147,22 @@ class RinseParams:
         return radial_basis_q_max(self.radial_scale, self.n_max, self.radial_basis)
 
     @property
+    def q_cutoff(self) -> float:
+        """Reflection-gathering cutoff |G| in Å⁻¹ = ``qmax_factor · q_max``.
+
+        Reflections are gathered out to this radius (rather than ``q_max``) so
+        the Gaussian tails of the outermost radial shells are represented.
+        """
+        return self.q_max * self.qmax_factor
+
+    @property
     def sin_theta_over_lambda_max(self) -> float:
         """Derived sin(θ)/λ resolution cutoff in Å⁻¹ (diagnostic).
 
-        Equal to ``q_max / 2``; this is the resolution at which reflections are
-        computed for the current shell layout.
+        Equal to ``q_cutoff / 2``; this is the resolution to which reflections
+        are gathered for the current shell layout (``qmax_factor · q_max``).
         """
-        return 0.5 * self.q_max
+        return 0.5 * self.q_cutoff
 
     @property
     def l_values(self) -> list[int]:
