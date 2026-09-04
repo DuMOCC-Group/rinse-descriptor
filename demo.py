@@ -79,11 +79,10 @@ def _(mo):
     indexed by radial order *n* and even angular
     level *ℓ* ∈ {4, 6, 8, …, 34}.
 
-    Descriptor weights are intensities, I = |F|². By default the
+    Descriptor weights are intensities, I = |F|². The
     resolution-dependent intensity envelope is removed at the power-spectrum
     level by monopole (ℓ=0) normalisation, which divides each radial level by
-    its spherically-averaged scattering power. Reflection-level intensity
-    normalisation and the Debye-Waller falloff are available but off by default.
+    its spherically-averaged scattering power.
 
     Upload a structure file, then adjust
     the parameters below.
@@ -126,17 +125,6 @@ def _(mo):
     each radial level's angular power p(n, ℓ) is divided by its monopole power
     p(n, 0), the spherically-averaged scattering in that shell. Systematic
     absences do not contribute to the ℓ=0 projection, so it is robust.
-
-    Intensity normalisation (off by default) is a reflection-level alternative
-    that estimates the mean |F|² envelope (adaptive bins for empirical, or a
-    fitted A·exp(-b·s²-c·s⁴) for double-exponential), applied as F' =
-    F / sqrt(envelope), then weights the descriptor with I' = |F'|².
-
-    Intensity falloff (off by default) applies an amplitude window. The
-    Debye-Waller falloff multiplies amplitudes by exp(-8π² U_iso s²),
-    where s = sin(theta)/lambda and U_iso defaults to 0.0 Å².
-    This will be normalised out by the monopole normalisation if both
-    are used.
 
     log1p compression reduces the dynamic range of the descriptor.
     This is generally required when monopoles are included.
@@ -192,24 +180,6 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         value="xray",
         label="Form factor type",
     )
-    intensity_norm_dd = mo.ui.dropdown(
-        options=["none", "empirical", "double_exponential"],
-        value=_defaults["intensity_normalisation"],
-        label="Intensity normalisation",
-    )
-    intensity_falloff_dd = mo.ui.dropdown(
-        options=["none", "debye_waller"],
-        value=_defaults["intensity_falloff"],
-        label="Intensity falloff",
-    )
-    intensity_falloff_u_iso_slider = mo.ui.slider(
-        start=0.0,
-        stop=0.2,
-        step=0.001,
-        value=_defaults["intensity_falloff_u_iso"],
-        label="Falloff U_iso  (Å²)",
-        show_value=True,
-    )
     monopole_norm_cb = mo.ui.checkbox(
         value=_defaults["monopole_normalisation"],
         label="monopole (ℓ=0) normalisation",
@@ -235,9 +205,6 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
                 [
                     basis_dd,
                     ff_dd,
-                    intensity_norm_dd,
-                    intensity_falloff_dd,
-                    intensity_falloff_u_iso_slider,
                     monopole_norm_cb,
                     log1p_compression_cb,
                     l2_normalisation_cb,
@@ -254,9 +221,6 @@ def _(DEFAULT_HASH_WORDS, RinseParams, dataclasses, mo):
         basis_dd,
         ff_dd,
         include_odd_l_cb,
-        intensity_falloff_dd,
-        intensity_falloff_u_iso_slider,
-        intensity_norm_dd,
         l2_normalisation_cb,
         l_max_slider,
         l_min_slider,
@@ -295,9 +259,6 @@ def _(
     compute_structure_factors,
     ff_dd,
     include_odd_l_cb,
-    intensity_falloff_dd,
-    intensity_falloff_u_iso_slider,
-    intensity_norm_dd,
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
@@ -345,9 +306,6 @@ def _(
                 include_odd_l=include_odd_l_cb.value,
                 radial_scale=radial_scale_slider.value,
                 radial_basis=basis_dd.value,
-                intensity_normalisation=intensity_norm_dd.value,
-                intensity_falloff=intensity_falloff_dd.value,
-                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 monopole_normalisation=monopole_norm_cb.value,
                 log1p=log1p_compression_cb.value,
                 l2=l2_normalisation_cb.value,
@@ -358,9 +316,6 @@ def _(
                 sin_theta_over_lambda_max=_params.sin_theta_over_lambda_max,
                 form_factor_type=ff_dd.value,
                 structure_factor_type="F2",
-                intensity_normalisation=intensity_norm_dd.value,
-                intensity_falloff=intensity_falloff_dd.value,
-                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 debug=True,
             )
             _P = compute_power_spectrum(
@@ -570,9 +525,6 @@ def _(
     dataclasses,
     descriptor,
     ff_dd,
-    intensity_falloff_dd,
-    intensity_falloff_u_iso_slider,
-    intensity_norm_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
@@ -591,9 +543,6 @@ def _(
     _scales = np.round(np.arange(0.90, 1.1001, 0.01), 2)
     _params = dataclasses.replace(
         params,
-        intensity_falloff=intensity_falloff_dd.value,
-        intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
-        intensity_normalisation=intensity_norm_dd.value,
         log1p=log1p_compression_cb.value,
         l2=l2_normalisation_cb.value,
         flatten=False,
@@ -701,9 +650,6 @@ def _(
     dataclasses,
     descriptor,
     ff_dd,
-    intensity_falloff_dd,
-    intensity_falloff_u_iso_slider,
-    intensity_norm_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
@@ -724,9 +670,6 @@ def _(
     _scales = np.round(np.arange(-0.1, 0.1001, 0.01), 2)
     _params = dataclasses.replace(
         params,
-        intensity_falloff=intensity_falloff_dd.value,
-        intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
-        intensity_normalisation=intensity_norm_dd.value,
         log1p=log1p_compression_cb.value,
         l2=l2_normalisation_cb.value,
         flatten=False,
@@ -846,9 +789,6 @@ def _(
     dataclasses,
     descriptor,
     ff_dd,
-    intensity_falloff_dd,
-    intensity_falloff_u_iso_slider,
-    intensity_norm_dd,
     l2_normalisation_cb,
     log1p_compression_cb,
     mo,
@@ -865,9 +805,6 @@ def _(
     _scales = np.round(np.arange(0, 1.001, 0.1), 2)
     _params = dataclasses.replace(
         params,
-        intensity_falloff=intensity_falloff_dd.value,
-        intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
-        intensity_normalisation=intensity_norm_dd.value,
         log1p=log1p_compression_cb.value,
         l2=l2_normalisation_cb.value,
         flatten=False,
@@ -977,9 +914,6 @@ def _(
     compute_structure_factors,
     ff_dd,
     include_odd_l_cb,
-    intensity_falloff_dd,
-    intensity_falloff_u_iso_slider,
-    intensity_norm_dd,
     l2_normalisation_cb,
     l_max_slider,
     l_min_slider,
@@ -1025,9 +959,6 @@ def _(
                 include_odd_l=include_odd_l_cb.value,
                 radial_scale=radial_scale_slider.value,
                 radial_basis=basis_dd.value,
-                intensity_normalisation=intensity_norm_dd.value,
-                intensity_falloff=intensity_falloff_dd.value,
-                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 monopole_normalisation=monopole_norm_cb.value,
                 log1p=log1p_compression_cb.value,
                 l2=l2_normalisation_cb.value,
@@ -1038,9 +969,6 @@ def _(
                 sin_theta_over_lambda_max=_params.sin_theta_over_lambda_max,
                 form_factor_type=ff_dd.value,
                 structure_factor_type="F2",
-                intensity_normalisation=intensity_norm_dd.value,
-                intensity_falloff=intensity_falloff_dd.value,
-                intensity_falloff_u_iso=intensity_falloff_u_iso_slider.value,
                 debug=True,
             )
             _P = compute_power_spectrum(

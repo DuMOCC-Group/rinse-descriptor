@@ -105,41 +105,6 @@ def _make_parser() -> argparse.ArgumentParser:
         help="Disable L2 normalisation.",
     )
     norm.add_argument(
-        "--intensity-normalisation",
-        default=defaults.intensity_normalisation,
-        choices=["none", "double_exponential", "empirical"],
-        help=(
-            "Normalise the resolution-dependent intensity envelope before descriptor accumulation."
-        ),
-    )
-    norm.add_argument(
-        "--intensity-normalisation-bins",
-        type=int,
-        default=defaults.intensity_normalisation_n_bins,
-        metavar="N",
-        help="Maximum adaptive bins for empirical intensity normalisation.",
-    )
-    norm.add_argument(
-        "--intensity-normalisation-min-bin-size",
-        type=int,
-        default=defaults.intensity_normalisation_min_bin_size,
-        metavar="N",
-        help="Minimum target reflections per empirical intensity-normalisation bin.",
-    )
-    norm.add_argument(
-        "--intensity-falloff",
-        default=defaults.intensity_falloff,
-        choices=["none", "debye_waller"],
-        help="Amplitude falloff applied after intensity normalisation.",
-    )
-    norm.add_argument(
-        "--intensity-falloff-u-iso",
-        type=float,
-        default=defaults.intensity_falloff_u_iso,
-        metavar="U",
-        help="Average U_iso in Å² for --intensity-falloff=debye_waller.",
-    )
-    norm.add_argument(
         "--no-monopole-normalisation",
         dest="monopole_normalisation",
         action="store_false",
@@ -248,11 +213,6 @@ def main(argv: list[str] | None = None) -> int:
             include_odd_l=args.include_odd_l,
             radial_scale=args.radial_scale,
             radial_basis=args.radial_basis,
-            intensity_normalisation=args.intensity_normalisation,
-            intensity_normalisation_n_bins=args.intensity_normalisation_bins,
-            intensity_normalisation_min_bin_size=args.intensity_normalisation_min_bin_size,
-            intensity_falloff=args.intensity_falloff,
-            intensity_falloff_u_iso=args.intensity_falloff_u_iso,
             monopole_normalisation=args.monopole_normalisation,
             log1p=args.log1p,
             l2=args.l2,

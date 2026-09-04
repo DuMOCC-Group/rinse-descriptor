@@ -37,13 +37,12 @@ import time
 from dataclasses import dataclass
 from math import pi as _pi
 from math import sqrt as _msqrt
-from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 from ._radial_basis import RadialBasisType, evaluate_radial_basis, radial_basis_q_max
-from ._structure_factors import IntensityFalloff, IntensityNormalisation, ReflectionList
+from ._structure_factors import ReflectionList
 
 # ---------------------------------------------------------------------------
 # Descriptor parameters
@@ -94,28 +93,6 @@ class RinseParams:
         :attr:`sin_theta_over_lambda_max`).
     radial_basis:
         ``"smooth_shells_nl"`` (default) or ``"smooth_shells_cw"``.
-    intensity_normalisation:
-        Reflection-level resolution-envelope normalisation for the input
-        intensities.  ``"none"`` (default) leaves calculated intensities
-        unchanged; by default the resolution envelope is removed instead at the
-        power-spectrum level via ``monopole_normalisation`` (see below).
-        ``"double_exponential"`` fits a physically motivated unbinned envelope
-        ``A * exp(-b*s^2 - c*s^4)`` over all reflections, where
-        ``s = sin(θ)/λ``. ``"empirical"`` estimates the mean envelope in
-        adaptive sin(θ)/λ bins.  Both transform amplitudes as
-        ``F' = F / sqrt(envelope)`` and weight the descriptor with
-        ``I' = |F'|²``.
-    intensity_normalisation_n_bins:
-        Maximum number of adaptive bins for empirical intensity normalisation.
-    intensity_normalisation_min_bin_size:
-        Minimum target reflections per empirical normalisation bin.
-    intensity_falloff:
-        Amplitude falloff applied after intensity normalisation.
-        ``"none"`` (default) disables falloff; ``"debye_waller"`` applies an
-        isotropic Debye-Waller factor.
-    intensity_falloff_u_iso:
-        Average isotropic displacement parameter in Å² for Debye-Waller falloff.
-        Default 0.0.
     set_fixed_uiso:
         If *None* (default), use displacement parameters as reported in the CIF
         (isotropic or anisotropic). If a float, discard the reported ADPs and
@@ -128,8 +105,7 @@ class RinseParams:
         function ``R_n`` over reciprocal space, i.e. the spherically-averaged
         scattering power in shell *n*; dividing by it removes the
         resolution-dependent intensity envelope on a per-shell basis.  This is
-        the default resolution-envelope handling (an alternative to the
-        reflection-level ``intensity_normalisation``) and is robust to
+        the default resolution-envelope handling and is robust to
         systematic absences (which do not contribute to the ℓ=0 projection).
         Applied before ``log1p`` and ``l2``.
     """
@@ -140,13 +116,6 @@ class RinseParams:
     include_odd_l: bool = False
     radial_scale: float = 0.35
     radial_basis: RadialBasisType = "smooth_shells_nl"
-    intensity_normalisation: (
-        IntensityNormalisation | Literal["none", "double_exponential", "empirical"]
-    ) = "none"
-    intensity_normalisation_n_bins: int | None = None
-    intensity_normalisation_min_bin_size: int | None = None
-    intensity_falloff: IntensityFalloff | Literal["none", "debye_waller"] = "none"
-    intensity_falloff_u_iso: float = 0.0
     set_fixed_uiso: float | None = None
     monopole_normalisation: bool = True
     log1p: bool = False
@@ -161,28 +130,6 @@ class RinseParams:
                 raise ValueError(f"l_min must be even when include_odd_l=False, got {self.l_min}")
         if self.l_min >= self.l_max:
             raise ValueError(f"l_min ({self.l_min}) must be less than l_max ({self.l_max})")
-        self.intensity_normalisation = IntensityNormalisation(self.intensity_normalisation)
-        if (
-            self.intensity_normalisation_n_bins is not None
-            and self.intensity_normalisation_n_bins < 1
-        ):
-            raise ValueError(
-                "intensity_normalisation_n_bins must be >= 1, "
-                f"got {self.intensity_normalisation_n_bins}"
-            )
-        if (
-            self.intensity_normalisation_min_bin_size is not None
-            and self.intensity_normalisation_min_bin_size < 1
-        ):
-            raise ValueError(
-                "intensity_normalisation_min_bin_size must be >= 1, "
-                f"got {self.intensity_normalisation_min_bin_size}"
-            )
-        self.intensity_falloff = IntensityFalloff(self.intensity_falloff)
-        if self.intensity_falloff_u_iso < 0.0:
-            raise ValueError(
-                f"intensity_falloff_u_iso must be >= 0, got {self.intensity_falloff_u_iso}"
-            )
 
     @property
     def q_max(self) -> float:

@@ -1,11 +1,10 @@
 """Radial basis functions for the RINSE descriptor.
 
-Shells are *anchored by index* through a single ``radial_scale`` factor rather
-than being stretched to fill a ``[0, q_max]`` window.  This means the position
-of shell *n* is fixed regardless of ``n_max``: increasing ``n_max`` simply adds
-further shells at higher *q* while leaving the already-computed shells
-unchanged.  The reciprocal-space cutoff ``q_max`` is therefore a *derived*
-quantity (see :func:`radial_basis_q_max`), not an input.
+Shells are *anchored by index* through a single ``radial_scale`` factor.
+This means the position of shell *n* is fixed regardless of ``n_max``:
+increasing ``n_max`` simply adds further shells at higher *q* while leaving
+the already-computed shells unchanged.  The reciprocal-space cutoff ``q_max``
+is therefore a derived quantity (see :func:`radial_basis_q_max`), not an input.
 
 Two families are supported:
 

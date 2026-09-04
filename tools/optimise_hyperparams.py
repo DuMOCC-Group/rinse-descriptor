@@ -136,25 +136,6 @@ def _build_params(trial: optuna.trial.Trial) -> RinseParams | None:
             "smooth_shells_nl",
         ],
     )
-    intensity_norm = trial.suggest_categorical(
-        "intensity_normalisation",
-        [
-            "none",
-            #"double_exponential",
-            #"empirical"
-        ],
-    )
-    intensity_falloff = trial.suggest_categorical(
-        "intensity_falloff",
-        [
-            "none",
-            #"debye_waller"
-        ],
-    )
-    # u_iso is only meaningful when Debye-Waller falloff is active, but Optuna
-    # needs a consistent parameter space across trials.  We sample it always and
-    # pass it through; RinseParams ignores it when falloff="none".
-    u_iso = trial.suggest_float("intensity_falloff_u_iso", 0.0, 0.0, step=0.02)
     log1p = trial.suggest_categorical("log1p", [
         False,
         #True
@@ -167,9 +148,6 @@ def _build_params(trial: optuna.trial.Trial) -> RinseParams | None:
             l_min=l_min,
             radial_scale=radial_scale,
             radial_basis=radial_basis,  # type: ignore[arg-type]
-            intensity_normalisation=intensity_norm,  # type: ignore[arg-type]
-            intensity_falloff=intensity_falloff,  # type: ignore[arg-type]
-            intensity_falloff_u_iso=u_iso,
             log1p=log1p,
             l2=True,  # always L2-normalise so Pearson is comparable across trials
             flatten=True,
@@ -192,11 +170,6 @@ def _compute_descriptor(xrs: Any, params: RinseParams) -> np.ndarray | None:
         reflections = compute_structure_factors(
             xrs,
             sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
-            intensity_normalisation=params.intensity_normalisation,
-            intensity_normalisation_n_bins=params.intensity_normalisation_n_bins,
-            intensity_normalisation_min_bin_size=params.intensity_normalisation_min_bin_size,
-            intensity_falloff=params.intensity_falloff,
-            intensity_falloff_u_iso=params.intensity_falloff_u_iso,
             use_reported_adps=params.use_reported_adps,
         )
         P = compute_power_spectrum(reflections, params=params)
@@ -713,9 +686,6 @@ def _print_trial_params(trial: optuna.trial.Trial) -> None:
     print(f"  n_l_levels (derived)      = {trial.params['n_l_levels']}")
     print(f"  radial_scale              = {trial.params['radial_scale']:.4f}")
     print(f"  radial_basis              = {trial.params['radial_basis']!r}")
-    print(f"  intensity_normalisation   = {trial.params['intensity_normalisation']!r}")
-    print(f"  intensity_falloff         = {trial.params['intensity_falloff']!r}")
-    print(f"  intensity_falloff_u_iso   = {trial.params['intensity_falloff_u_iso']:.4f}")
     print(f"  log1p                     = {trial.params['log1p']}")
     print("  l2                        = True")
 
@@ -731,9 +701,6 @@ def _params_from_dict(p: dict[str, Any]) -> RinseParams | None:
             l_min=l_min,
             radial_scale=p["radial_scale"],
             radial_basis=p["radial_basis"],
-            intensity_normalisation=p["intensity_normalisation"],
-            intensity_falloff=p["intensity_falloff"],
-            intensity_falloff_u_iso=p["intensity_falloff_u_iso"],
             log1p=p["log1p"],
             l2=True,
             flatten=True,
@@ -818,11 +785,6 @@ def _spec_to_trial_params(spec: dict[str, Any]) -> dict[str, Any]:
         "n_l_levels": n_l_levels,
         "radial_scale": float(spec.get("radial_scale", 0.35)),
         "radial_basis": spec.get("radial_basis", "smooth_shells_nl"),
-        "intensity_normalisation": spec.get(
-            "intensity_normalisation", "none"
-        ),
-        "intensity_falloff": spec.get("intensity_falloff", "none"),
-        "intensity_falloff_u_iso": float(spec.get("intensity_falloff_u_iso", 0.05)),
         "log1p": bool(spec.get("log1p", False)),
     }
 

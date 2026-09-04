@@ -39,8 +39,6 @@ from ._descriptor import (  # noqa: E402
 from ._hash import DEFAULT_HASH_WORDS, descriptor_hash, hash_to_bits  # noqa: E402
 from ._structure_factors import (  # noqa: E402
     FormFactorType,
-    IntensityFalloff,
-    IntensityNormalisation,
     ReflectionList,
     StructureFactorType,
     compute_structure_factors,
@@ -61,8 +59,6 @@ __all__ = [
     "load_structure",
     "RinseParams",
     "FormFactorType",
-    "IntensityFalloff",
-    "IntensityNormalisation",
     "StructureFactorType",
     "ReflectionList",
     "compute_structure_factors",
@@ -106,9 +102,9 @@ def descriptor(
 
     Notes
     -----
-    The descriptor is always weighted by intensities ``I = |F|²``.  Set
-    ``params.intensity_normalisation`` to remove the resolution-dependent
-    intensity envelope before the power spectrum is accumulated.
+    The descriptor is always weighted by intensities ``I = |F|²``.  The
+    resolution-dependent intensity envelope is removed at the power-spectrum
+    level via ``params.monopole_normalisation``.
 
     Returns
     -------
@@ -146,11 +142,6 @@ def descriptor(
         sin_theta_over_lambda_max=params.sin_theta_over_lambda_max,
         form_factor_type=form_factor_type,
         structure_factor_type="F2",
-        intensity_normalisation=params.intensity_normalisation,
-        intensity_normalisation_n_bins=params.intensity_normalisation_n_bins,
-        intensity_normalisation_min_bin_size=params.intensity_normalisation_min_bin_size,
-        intensity_falloff=params.intensity_falloff,
-        intensity_falloff_u_iso=params.intensity_falloff_u_iso,
         set_fixed_uiso=set_fixed_uiso,
         debug=debug,
     )

@@ -13,9 +13,7 @@ structure factor calculated via cctbx direct summation with
 X-ray form factors by default. Isotropic and anisotropic displacement parameters are read from
 the CIF by default. The resolution-dependent intensity envelope is removed at the power-spectrum
 level by **monopole (*l* = 0) normalisation**, which divides each radial level by its
-spherically-averaged scattering power. Reflection-level intensity normalisation
-(double-exponential or empirical) and the isotropic Debye-Waller falloff are
-available but off by default.
+spherically-averaged scattering power. 
 
 The expansion coefficients are:
 
@@ -121,12 +119,11 @@ params = RinseParams(
     radial_scale=0.35,              # per-shell scale in Å⁻¹ (resolution cutoff is derived)
     radial_basis="smooth_shells_nl",  # or "smooth_shells_cw"
     monopole_normalisation=False,    # optional: disable the default monopole (ℓ=0) envelope removal
-    intensity_normalisation="double_exponential",  # optional reflection-level envelope removal (off by default)
 )
 x = descriptor("mystructure.cif", params=params)
 ```
 
-### Form factors, intensity normalisation, and falloff
+### Form factors
 
 ```python
 from rinse_descriptor import descriptor
@@ -135,20 +132,10 @@ from rinse_descriptor import descriptor
 x = descriptor("mystructure.cif", form_factor_type="electron")
 
 # Monopole (l=0) normalisation removes the resolution envelope by default.
-# Reflection-level intensity_normalisation and Debye-Waller falloff are off by default;
-# enable with intensity_normalisation="double_exponential" / intensity_falloff="debye_waller".
 x_norm = descriptor("mystructure.cif")
 ```
 
 Available `form_factor_type` values: `"xray"` (default), `"electron"`, `"neutron"`.
-
-Available `intensity_normalisation` values:
-`"none"` (default), `"double_exponential"`, `"empirical"`.
-
-Available `intensity_falloff` values: `"none"` (default), `"debye_waller"`.
-For `"debye_waller"`, `intensity_falloff_u_iso` sets the average isotropic
-displacement parameter used in the amplitude factor
-$\exp(-8 \pi^2 U_{iso} (\sin(\theta)/\lambda)^2)$; the default is `0.05` Å².
 
 ## Locality-sensitive hashing
 
