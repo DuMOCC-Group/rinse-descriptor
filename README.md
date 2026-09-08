@@ -29,12 +29,12 @@ $$
 
 Because the intensity field is centrosymmetric if anomalous dispersion is not considered, only even *l*
 contributes. By default, RINSE also drops the monopole (*l* = 0) and quadrupole
-(*l* = 2) terms. Default parameters give an **8 × 16 = 128-element** descriptor:
+(*l* = 2) terms. Default parameters give an **16 × 8 = 128-element** descriptor:
 
 | Axis | Values | Count |
 |------|--------|-------|
-| Radial (*n*) | 0, 1, …, 7 | 8 |
-| Angular (*l*) | 4, 6, 8, …, 34 (even only) | 16 |
+| Radial (*n*) | 0, 1, …, 15 | 16 |
+| Angular (*l*) | 4, 6, 8, …, 18 (even only) | 8 |
 
 ## Installation
 
@@ -90,7 +90,7 @@ print(x.shape)  # (128,)
 # Return the 2-D power-spectrum matrix instead
 params = RinseParams(flatten=False)
 x_mat = descriptor("mystructure.cif", params=params)
-print(x_mat.shape)  # (8, 16)
+print(x_mat.shape)  # (16, 8)
 
 # Batch of structures → (N, 128)
 structures = ["structure_1.cif", "structure_2.cif"]
@@ -114,9 +114,9 @@ print(x.shape)  # (128,)
 from rinse_descriptor import RinseParams, descriptor
 
 params = RinseParams(
-    n_max=8,                       # radial shells (n = 0 … 7)
-    l_max=36,                       # angular levels (gives l = 4,6,...,34 by default)
-    radial_scale=0.35,              # per-shell scale in Å⁻¹ (resolution cutoff is derived)
+    n_max=16,                       # radial shells (n = 0 … 15)
+    l_max=20,                       # angular levels (gives l = 4,6,...,18 by default)
+    radial_scale=0.3,               # per-shell scale in Å⁻¹ (resolution cutoff is derived)
     radial_basis="cv_gaussian",  # or "lin_gaussian"
     monopole_normalisation=False,    # optional: disable the default monopole (ℓ=0) envelope removal
 )

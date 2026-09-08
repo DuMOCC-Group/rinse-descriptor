@@ -75,7 +75,7 @@ def _(mo):
     **Reciprocal-space INvariant Spectral Embedding*
 
     Computes the intensity-weighted reciprocal-space power spectrum for any
-    crystal structure. The descriptor is by default an **8 × 16 matrix** (128 elements)
+    crystal structure. The descriptor is by default an **16 × 8 matrix** (128 elements)
     indexed by radial order *n* and even angular
     level *ℓ* ∈ {4, 6, 8, …, 34}.
 

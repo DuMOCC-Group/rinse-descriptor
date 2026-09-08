@@ -18,9 +18,9 @@ contributions from odd-l harmonics cancel exactly.  Only even l contribute:
     l ∈ {0, 2, 4, …, 2*(L-1)}  for L angular levels.
 
 Default parameters:
-    n_max = 8  → radial indices 0 … 7
-    l_min = 4, l_max = 36  → angular levels: l ∈ {4, 6, …, 34}  (16 levels)
-    Output: (8, 16) matrix  → flattened to 128-element vector
+    n_max = 16 → radial indices 0 … 15
+    l_min = 4, l_max = 20  → angular levels: l ∈ {4, 6, …, 18}  (8 levels)
+    Output: (16, 8) matrix  → flattened to 128-element vector
             axis-0 = radial index n
             axis-1 = angular level index
 
@@ -56,9 +56,9 @@ class RinseParams:
     Attributes
     ----------
     n_max:
-        Number of radial basis functions (n = 0 … n_max-1).  Default 8.
+        Number of radial basis functions (n = 0 … n_max-1).  Default 16.
     l_max:
-        Maximum ℓ value (exclusive).  Default 36.
+        Maximum ℓ value (exclusive).  Default 20.
         When ``include_odd_l=False`` (default), angular levels are the even
         values ℓ ∈ {l_min, l_min+2, …, l_max-2} and l_min/l_max must be even.
         When ``include_odd_l=True``, all integers ℓ ∈ {l_min, …, l_max-1}
@@ -85,7 +85,7 @@ class RinseParams:
         flat 1-D vector of length ``n_max * n_l_levels``.  If *False*, returns
         the 2-D ``(n_max, n_l_levels)`` matrix.
     radial_scale:
-        Per-shell scale factor in Å⁻¹.  Default 0.35.  Sets the distance between
+        Per-shell scale factor in Å⁻¹.  Default 0.3.  Sets the distance between
         radial shells; shell positions are anchored by index and independent of
         ``n_max``, so increasing ``n_max`` extends the descriptor to higher |G|
         while leaving the already-computed shells unchanged.  The reciprocal-
@@ -117,11 +117,11 @@ class RinseParams:
         Applied before ``log1p`` and ``l2``.
     """
 
-    n_max: int = 8
-    l_max: int = 36
+    n_max: int = 16
+    l_max: int = 20
     l_min: int = 4
     include_odd_l: bool = False
-    radial_scale: float = 0.35
+    radial_scale: float = 0.3
     qmax_factor: float = 1.2
     radial_basis: RadialBasisType = "cv_gaussian"
     set_fixed_uiso: float | None = None

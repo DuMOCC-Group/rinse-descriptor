@@ -78,7 +78,7 @@ def evaluate_radial_basis(
     q: NDArray[np.float64],
     *,
     radial_scale: float,
-    n_max: int = 8,
+    n_max: int = 16,
     basis: RadialBasisType = "cv_gaussian",
 ) -> NDArray[np.float64]:
     """Evaluate radial basis functions at reciprocal-space magnitudes *q*.
