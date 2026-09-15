@@ -415,11 +415,10 @@ class TestAdditionalInvariances:
         # descriptor should be (nearly) invariant to this choice of setting.
         #
         # In the super-cell the systematically absent reflections appear
-        # explicitly as near-zero |F|^2 rather than being omitted. The
-        # double-exponential intensity normalisation fits its envelope to a
-        # Gaussian-broadened powder profile built by summing intensities, so
-        # those absences contribute nothing and the descriptor stays comparable
-        # across settings.
+        # explicitly as near-zero |F|^2 rather than being omitted. Monopole
+        # (l=0) normalisation divides out the per-shell resolution envelope,
+        # and near-zero absences contribute nothing to that envelope, so the
+        # descriptor stays comparable across settings.
         x1 = load_res(FIXTURES_DIR / "TETRAZ01.res")
         x2 = load_res(FIXTURES_DIR / "TETRAZ02.res")
 

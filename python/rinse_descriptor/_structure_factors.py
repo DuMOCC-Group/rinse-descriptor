@@ -172,7 +172,7 @@ def compute_structure_factors(
     _t = time.perf_counter()
     F2 = (F_vals * F_vals.conj()).real.astype(np.float64)
 
-    # Remove (000) and any zero-vector reflections before estimating envelopes.
+    # Remove (000) and any zero-vector reflections.
     mask = q_magnitudes > 1e-9
     hkl_arr = hkl_arr[mask].astype(np.int32)
     q_vectors = q_vectors[mask]

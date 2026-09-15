@@ -6,7 +6,8 @@ process while the heavy crystallography runs in the pool.  The script also
 supports index-based chunking for distributing work across separate machines.
 
 Every 100 new structures a per-position letter histogram is printed to stderr
-as a quick visual check that the hash characters are uniformly distributed.
+as a quick visual check that the hash characters are uniformly distributed;
+pass ``--no-histogram`` to skip this analysis entirely.
 
 Outputs:
     - csd_hashes_chunk_N.csv: CSV file with refcode and hash columns
@@ -224,6 +225,11 @@ def main():
         default=os.cpu_count() or 1,
         help="Worker processes for descriptor computation (default: all CPUs).",
     )
+    parser.add_argument(
+        "--no-histogram",
+        action="store_true",
+        help="Skip the per-position letter histogram analysis entirely.",
+    )
     args = parser.parse_args()
 
     if args.refcode is not None:
@@ -270,7 +276,7 @@ def main():
     params = RinseParams()
     n_words = args.n_words
     jobs = max(1, args.jobs)
-    histogram = _LetterHistogram(n_words)
+    histogram = _LetterHistogram(n_words) if not args.no_histogram else None
 
     # Open CSV file for writing
     with open(csv_file, "w", newline="") as csvfile:
@@ -283,7 +289,8 @@ def main():
             for refcode, desc in zip(refcodes, descriptors):
                 hash_str = descriptor_hash(desc, n_words=n_words)
                 writer.writerow([refcode, hash_str])
-                histogram.update(hash_str)
+                if histogram is not None:
+                    histogram.update(hash_str)
             csvfile.flush()
 
         new_count = 0
@@ -341,7 +348,8 @@ def main():
 
                 hash_str = descriptor_hash(desc, n_words=n_words)
                 writer.writerow([refcode, hash_str])
-                histogram.update(hash_str)
+                if histogram is not None:
+                    histogram.update(hash_str)
 
                 # Every 100 new structures: checkpoint and show the distribution.
                 if new_count % 100 == 0:
@@ -359,7 +367,8 @@ def main():
                         f"{new_count} new ({total_errors} errors)  [{rate:.1f} struct/s]",
                         file=sys.stderr,
                     )
-                    print(histogram.render(), file=sys.stderr)
+                    if histogram is not None:
+                        print(histogram.render(), file=sys.stderr)
         finally:
             if pool is not None:
                 pool.close()
@@ -379,7 +388,7 @@ def main():
                 f"added {new_count} new ({total_errors} errors).",
                 file=sys.stderr,
             )
-        if histogram.total:
+        if histogram is not None and histogram.total and False:
             print(histogram.render(), file=sys.stderr)
         print(f"Results saved to {csv_file}", file=sys.stderr)
 

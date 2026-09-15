@@ -13,6 +13,10 @@ Two pickle layouts are accepted:
 
 Outputs:
     - ../python/rinse_descriptor/data/pca_components.json (default)
+      Includes ``version`` (rinse_descriptor package version), ``date`` (UTC
+      ISO-8601 timestamp) and ``training_set`` (list of source labels, e.g.
+      ``["csd"]``, auto-detected from the input records or set via
+      ``--training-set``) alongside the PCA model itself.
 
 Usage:
     python compute_pca.py
@@ -23,10 +27,31 @@ Usage:
 import argparse
 import json
 import pickle
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 from sklearn.decomposition import PCA
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "python"))
+from rinse_descriptor import __version__ as _RINSE_VERSION  # noqa: E402
+
+
+def _detect_training_sources(input_file: Path) -> list[str] | None:
+    """Return the sorted unique ``source`` values in a training-set pickle.
+
+    Only the training-set record-list layout (see ``_load_descriptors``)
+    carries a ``source`` field per entry (e.g. ``"csd"``); the legacy
+    ``(refcodes, descriptors)`` tuple layout has no source metadata, so this
+    returns ``None`` for it.
+    """
+    with open(input_file, "rb") as f:
+        data = pickle.load(f)
+    if not (isinstance(data, list) and (not data or isinstance(data[0], dict))):
+        return None
+    sources = {record["source"] for record in data if "source" in record}
+    return sorted(sources) if sources else None
 
 
 def _load_descriptors(input_file: Path) -> tuple[list, np.ndarray]:
@@ -89,6 +114,19 @@ def main():
         default=str(default_output),
         help=f"Output JSON file (default: {default_output})",
     )
+    parser.add_argument(
+        "--training-set",
+        type=str,
+        default=None,
+        metavar="SOURCES",
+        help=(
+            "Comma-separated training-data source(s) to record in the output "
+            "(e.g. 'csd' or 'csd,cod,mp'). Auto-detected from the input "
+            "pickle's record 'source' fields when omitted (training-set "
+            "layout only); falls back to 'unknown' for the legacy "
+            "(refcodes, descriptors) tuple layout."
+        ),
+    )
     args = parser.parse_args()
 
     # Load descriptors
@@ -118,7 +156,15 @@ def main():
     )
 
     # Prepare output data
+    if args.training_set:
+        training_set = [s.strip() for s in args.training_set.split(",") if s.strip()]
+    else:
+        training_set = _detect_training_sources(input_file) or ["unknown"]
+
     output_data = {
+        "version": _RINSE_VERSION,
+        "date": datetime.now(timezone.utc).isoformat(),
+        "training_set": training_set,
         "n_components": int(pca.n_components_),
         "n_features": int(descriptors.shape[1]),
         "components": pca.components_.tolist(),

@@ -35,7 +35,6 @@ from numpy.typing import NDArray
 RadialBasisType = Literal[
     "cv_gaussian",
     "lin_gaussian",
-    "",
 ]
 
 
