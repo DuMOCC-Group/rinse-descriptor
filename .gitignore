@@ -89,3 +89,4 @@ cod_hashes.csv
 mp_hashes.csv
 .gitignore
 mp_descriptors.pkl
+.DS_Store
