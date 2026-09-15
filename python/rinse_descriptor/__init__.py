@@ -51,7 +51,7 @@ from ._structure_factors import (  # noqa: E402
     compute_structure_factors,
 )
 
-__version__ = "0.1.0"
+__version__ = "3.0.0"
 
 
 class _Unset:
