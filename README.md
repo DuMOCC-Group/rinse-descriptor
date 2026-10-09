@@ -51,21 +51,8 @@ curl -Ls https://astral.sh/uv/install.sh | sh
 # Install all dependencies
 uv sync
 
-# Run the demo.py notebook
+# Open the interactive demo
 uv run marimo edit demo.py
-```
-
-### Optional CSD API Installation for PCA analysis
-To recompute the PCA components used for the dimensionality reduction in the locality-sensitive hash (see [Locality-sensitive hashing](#locality-sensitive-hashing) below), install the CSD Python API and run the scripts in the tools folder.
-```bash
-# Install CSD Python API
-uv pip install --extra-index-url https://pip.ccdc.cam.ac.uk/ csd-python-api
-
-# Generate descriptors for CSD structures
-uv run tools/compute_csd_hashes.py 
-
-# Perform PCA analysis and update components in python/rinse_descriptor/data folder
-uv run tools/compute_pca.py 
 ```
 
 ### From PyPI
@@ -74,6 +61,58 @@ uv run tools/compute_pca.py
 pip install rinse-descriptor
 # or
 uv add rinse-descriptor
+```
+
+## Command-line interface
+
+The `rinse` command computes descriptors directly from crystallographic files.
+It accepts CIF, RES/INS, and measured reflection-list (`.hkl`) inputs.
+
+```bash
+# One structure; prints a flat 128-value descriptor
+rinse mystructure.cif
+
+# Several structures; prints one result per input
+rinse structure_1.cif structure_2.res
+
+# Include a deterministic locality-sensitive hash
+rinse mystructure.cif --hash --hash-words 3
+
+# Write machine-readable output
+rinse mystructure.cif --output-format json
+
+# Save the descriptor beside the input as mystructure.npy
+rinse mystructure.cif --output-format npy
+```
+
+Use `--help` to see all options and their defaults:
+
+```bash
+rinse --help
+rinse --version
+```
+
+By default, the CLI uses X-ray form factors, monopole and L2 normalisation,
+and returns a flattened 128-element descriptor. Use `--no-flatten` to return
+the radial-by-angular matrix instead. Common options include:
+
+```bash
+# Change descriptor resolution and radial basis
+rinse mystructure.cif --n-max 12 --l-max 48 --radial-basis lin_gaussian
+
+# Use electron or neutron form factors
+rinse mystructure.cif --form-factor electron
+
+# Disable normalisation options
+rinse mystructure.cif --no-monopole-normalisation --no-l2
+```
+
+Measured `.hkl` files require a cell and space group. The cell can be read
+from a CIF/RES/INS file or supplied as six comma-separated values:
+
+```bash
+rinse measured.hkl --cell mystructure.cif
+rinse measured.hkl --cell "5.64,5.64,5.64,90,90,90" --space-group "F m -3 m"
 ```
 
 ## Quick start

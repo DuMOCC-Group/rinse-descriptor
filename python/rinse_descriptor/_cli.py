@@ -10,6 +10,7 @@ Usage examples
     rinse nacl.cif --hash --hash-words 8
     rinse nacl.cif --output-format json
     rinse file1.cif file2.res --hash
+    rinse a.cif --compare b.res
     rinse file1.cif file2.res --no-flatten --output-format json
 """
 
@@ -170,6 +171,14 @@ def _make_parser() -> argparse.ArgumentParser:
         help="Number of 16-bit proquint words in the hash.",
     )
 
+    p.add_argument(
+        "--compare",
+        metavar="FILE",
+        default=None,
+        help="Second structure/.hkl file. Reports the Euclidean distance between "
+        "its RINSE vector and that of each input.",
+    )
+
     # Output
     p.add_argument(
         "--no-flatten",
@@ -278,6 +287,28 @@ def main(argv: list[str] | None = None) -> int:
     results: list[dict[str, object]] = []
     errors: list[str] = []
 
+    ref_vec = None
+    if args.compare is not None:
+        if not Path(args.compare).exists():
+            print(f"ERROR: {args.compare}: file not found", file=sys.stderr)
+            return 1
+        try:
+            ref_vec, _ = _compute_one(
+                args.compare,
+                params,
+                form_factor_type=cast(
+                    Literal["xray", "electron", "neutron"], args.form_factor_type
+                ),
+                want_hash=False,
+                hash_words=args.hash_words,
+                cell=args.cell,
+                space_group=args.space_group,
+                max_missing_fraction=args.max_missing_fraction,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"ERROR: {args.compare}: {exc}", file=sys.stderr)
+            return 1
+
     for input_file in args.input_files:
         path = Path(input_file)
         if not path.exists():
@@ -300,7 +331,15 @@ def main(argv: list[str] | None = None) -> int:
             errors.append(f"{input_file}: {exc}")
             continue
 
-        results.append({"file": input_file, "vector": vec, "hash": h})
+        dist = None
+        if ref_vec is not None:
+            a, b = np.asarray(vec).ravel(), np.asarray(ref_vec).ravel()
+            if a.shape != b.shape:
+                errors.append(f"{input_file}: descriptor shape {a.shape} != {b.shape} of --compare")
+                continue
+            dist = float(np.linalg.norm(a - b))
+
+        results.append({"file": input_file, "vector": vec, "hash": h, "distance": dist})
 
     if args.output_format == "json":
         out: list[dict[str, object]] = []
@@ -312,6 +351,9 @@ def main(argv: list[str] | None = None) -> int:
             }
             if r["hash"] is not None:
                 entry["hash"] = r["hash"]
+            if r["distance"] is not None:
+                entry["compare"] = args.compare
+                entry["distance"] = r["distance"]
             out.append(entry)
         print(json.dumps(out, indent=2))
 
@@ -322,7 +364,13 @@ def main(argv: list[str] | None = None) -> int:
             msg = f"Saved {out_path}"
             if r["hash"] is not None:
                 msg += f"  hash={r['hash']}"
+            if r["distance"] is not None:
+                msg += f"  distance={r['distance']:.8g}"
             print(msg)
+
+    elif args.compare is not None:  # text: distances only
+        for r in results:
+            print(f"{r['distance']:.8g}\t{r['file']}\t{args.compare}")
 
     else:  # text
         for r in results:
