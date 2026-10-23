@@ -19,7 +19,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from rinse_descriptor import RinseParams, descriptor, descriptor_many, load_cif, load_res
+from rinse_descriptor import (
+    FormFactorType,
+    RinseParams,
+    StructureFactorType,
+    descriptor,
+    descriptor_many,
+    load_cif,
+    load_res,
+)
 from rinse_descriptor._descriptor import compute_power_spectrum
 from rinse_descriptor._structure_factors import ReflectionList, compute_structure_factors
 
@@ -28,6 +36,11 @@ from rinse_descriptor._structure_factors import ReflectionList, compute_structur
 # ---------------------------------------------------------------------------
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def test_string_enum_compatibility() -> None:
+    assert str(FormFactorType.XRAY) == "xray"
+    assert str(StructureFactorType.F2) == "F2"
 
 
 @pytest.fixture(scope="module")

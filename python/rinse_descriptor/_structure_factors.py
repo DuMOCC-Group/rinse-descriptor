@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import sys
 import time
-from enum import StrEnum
+from enum import Enum
 from typing import Any, Literal
 
 import numpy as np
@@ -54,13 +54,18 @@ from numpy.typing import NDArray
 # ---------------------------------------------------------------------------
 
 
-class FormFactorType(StrEnum):
+class _StringEnum(str, Enum):
+    def __str__(self) -> str:
+        return str.__str__(self)
+
+
+class FormFactorType(_StringEnum):
     XRAY = "xray"
     ELECTRON = "electron"
     NEUTRON = "neutron"
 
 
-class StructureFactorType(StrEnum):
+class StructureFactorType(_StringEnum):
     F = "F"
     F2 = "F2"
 

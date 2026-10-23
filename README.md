@@ -38,6 +38,10 @@ contributes. By default, RINSE also drops the monopole (*l* = 0) and quadrupole
 
 ## Installation
 
+Python 3.8 is supported when RINSE is installed into an existing environment
+that provides `cctbx` (such as Olex2). On Python 3.8, `cctbx-base` is not
+installed by RINSE because its current PyPI builds require Python 3.9 or newer.
+
 ### From source (requires `uv`)
 
 ```bash
