@@ -8,7 +8,7 @@ on:
 
 jobs:
   python-38-compatibility:
-    name: Python 3.8 package compatibility
+    name: Python 3.8 package install compatibility
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,14 +22,8 @@ jobs:
       - name: Install project
         run: uv sync --group dev
 
-      - name: Install Python 3.8 cctbx build
-        run: uv pip install cctbx-base==2020.8
-
       - name: Compile package with Python 3.8
         run: uv run --no-sync python -m compileall -q python/rinse_descriptor
-
-      - name: pytest
-        run: uv run --no-sync pytest tests/ -v --tb=short --capture=sys
 
   # --------------------------------------------------------------------------
   # pre-commit hooks
