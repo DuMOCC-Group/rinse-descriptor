@@ -90,3 +90,4 @@ mp_hashes.csv
 .gitignore
 mp_descriptors.pkl
 .DS_Store
+structures/

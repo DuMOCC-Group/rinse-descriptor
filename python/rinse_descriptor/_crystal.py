@@ -70,19 +70,20 @@ def load_res(path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Any:
     path:
         A file path (``str`` or :class:`pathlib.Path`), an open binary or
         text file-like object, or any object with a ``read()`` method.
+
+    Missing SHELX atom occupancies default to 1.0 and missing isotropic
+    displacement parameters default to U_iso = 0.1 Å².
     """
     patch_cctbx_imports()
 
     from cctbx import xray
 
     try:
-        if hasattr(path, "read"):
-            text = _read_text(path)
-            from io import StringIO
+        from io import StringIO
 
-            xrs = xray.structure.from_shelx(file=StringIO(text), strictly_shelxl=False)
-        else:
-            xrs = xray.structure.from_shelx(filename=str(path), strictly_shelxl=False)
+        text = _read_text(path)
+        text = _add_shelx_atom_defaults(text)
+        xrs = xray.structure.from_shelx(file=StringIO(text), strictly_shelxl=False)
     except Exception as exc:
         raise ValueError(f"SHELX file {path!r} could not be parsed") from exc
 
@@ -90,6 +91,24 @@ def load_res(path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Any:
         raise ValueError(f"SHELX file {path!r} does not contain any atomic sites")
 
     return xrs
+
+
+def _add_shelx_atom_defaults(text: str) -> str:
+    """Fill omitted SHELX atom occupancy and isotropic displacement fields."""
+    lines = []
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) in (5, 6) and fields[0][0].isalpha() and fields[1].isdigit():
+            try:
+                tuple(float(value) for value in fields[2:5])
+            except ValueError:
+                pass
+            else:
+                if len(fields) == 5:
+                    line += " 0.5"
+                line += " 0.1"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def load_structure(path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Any:

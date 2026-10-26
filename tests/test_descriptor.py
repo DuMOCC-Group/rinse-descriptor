@@ -132,6 +132,34 @@ class TestLoaders:
         xrs = load_res(FIXTURES_DIR / "nacl.res")
         assert xrs.scatterers().size() > 0
 
+    def test_load_res_defaults_missing_occupancy_and_uiso(self, tmp_path: Path) -> None:
+        res_path = tmp_path / "missing_defaults.res"
+        res_path.write_text(
+            "\n".join(
+                [
+                    "TITL missing atom defaults",
+                    "CELL 0.71073 5 5 5 90 90 90",
+                    "LATT 1",
+                    "SFAC C",
+                    "UNIT 3",
+                    "C1 1 0.0 0.0 0.0",
+                    "C2 1 0.2 0.2 0.2 0.5",
+                    "C3 1 0.4 0.4 0.4 0.75 0.03",
+                    "END",
+                ]
+            )
+        )
+
+        scatterers = load_res(res_path).scatterers()
+
+        assert scatterers.size() == 3
+        assert scatterers[0].occupancy == pytest.approx(1.0)
+        assert scatterers[0].u_iso == pytest.approx(0.1)
+        assert scatterers[1].occupancy == pytest.approx(0.5)
+        assert scatterers[1].u_iso == pytest.approx(0.1)
+        assert scatterers[2].occupancy == pytest.approx(0.75)
+        assert scatterers[2].u_iso == pytest.approx(0.03)
+
 
 # ---------------------------------------------------------------------------
 # Reproducibility

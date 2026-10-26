@@ -164,10 +164,7 @@ def main():
         "--zip-path",
         type=Path,
         default=Path(r"C:\Users\Tom\Downloads\cod-cifs-mysql.zip"),
-        help=(
-            "Path to COD CIF zip archive "
-            "(default: C:/Users/Tom/Downloads/cod-cifs-mysql.zip)"
-        ),
+        help=("Path to COD CIF zip archive (default: C:/Users/Tom/Downloads/cod-cifs-mysql.zip)"),
     )
     parser.add_argument(
         "--cod-id",

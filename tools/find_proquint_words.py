@@ -141,9 +141,7 @@ def _parse_args() -> argparse.Namespace:
         dest="word_lists",
         action="append",
         type=Path,
-        help=(
-            "Path to a plain-text English word list. Repeat the flag to combine multiple lists."
-        ),
+        help=("Path to a plain-text English word list. Repeat the flag to combine multiple lists."),
     )
     parser.add_argument(
         "--output",

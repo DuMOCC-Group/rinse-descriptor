@@ -102,9 +102,7 @@ def _dataset_columns(docs: Any, fields: list[str]) -> dict[str, list[Any]]:
 def _resolve_api_key(cli_key: str | None) -> str:
     key = cli_key or os.environ.get("MP_API_KEY") or os.environ.get("PMG_MAPI_KEY")
     if not key:
-        raise ValueError(
-            "Materials Project API key missing. Pass --api-key or set MP_API_KEY."
-        )
+        raise ValueError("Materials Project API key missing. Pass --api-key or set MP_API_KEY.")
     return key
 
 

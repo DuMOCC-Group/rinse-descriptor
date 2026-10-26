@@ -79,10 +79,7 @@ class _LetterHistogram:
 
     def render(self) -> str:
         """Return a multi-line sparkline of the per-position distributions."""
-        lines = [
-            f"  hash letter distribution over {self.total} structures "
-            f"({self.n_words} words):"
-        ]
+        lines = [f"  hash letter distribution over {self.total} structures ({self.n_words} words):"]
         for w in range(self.n_words):
             for ip in range(5):
                 pos = w * 5 + ip
@@ -90,9 +87,7 @@ class _LetterHistogram:
                 counts = self._counts[pos]
                 kind = "vowel" if ip in (1, 3) else "cons "
                 peak = max(counts.values()) or 1
-                bars = "".join(
-                    _HIST_BLOCKS[min(8, round(8 * counts[ch] / peak))] for ch in alpha
-                )
+                bars = "".join(_HIST_BLOCKS[min(8, round(8 * counts[ch] / peak))] for ch in alpha)
                 prefix = f"    w{w + 1} p{ip + 1} {kind} "
                 lines.append(f"{prefix}{alpha}")
                 lines.append(f"{' ' * len(prefix)}{bars}")

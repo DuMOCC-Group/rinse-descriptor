@@ -394,7 +394,7 @@ def _(P, compute_error, mo, np, plt, vec):
     _ax.set_xlim(0, len(_vec) - 1)
     # plt.yscale('log')
     plt.tight_layout()
-    plt.savefig('out.svg')
+    plt.savefig("out.svg")
     _fig2
     return
 
