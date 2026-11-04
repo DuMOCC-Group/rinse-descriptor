@@ -175,8 +175,15 @@ def _make_parser() -> argparse.ArgumentParser:
         "--compare",
         metavar="FILE",
         default=None,
-        help="Second structure/.hkl file. Reports the Euclidean distance between "
+        help="Second structure/.hkl file. Reports the selected distance between "
         "its RINSE vector and that of each input.",
+    )
+    p.add_argument(
+        "--compare-metric",
+        choices=["euclidean", "cosine"],
+        default="euclidean",
+        metavar="METRIC",
+        help="Distance metric used with --compare.",
     )
 
     # Output
@@ -261,6 +268,22 @@ def _compute_one(
     return vec, h
 
 
+def _compare_distance(
+    a: np.ndarray, b: np.ndarray, metric: Literal["euclidean", "cosine"]
+) -> float:
+    """Compute a supported distance between flattened descriptor vectors."""
+    if metric == "euclidean":
+        return float(np.linalg.norm(a - b))
+    if metric == "cosine":
+        norm_a = float(np.linalg.norm(a))
+        norm_b = float(np.linalg.norm(b))
+        if norm_a == 0.0 or norm_b == 0.0:
+            raise ValueError("cosine distance is undefined for a zero-length descriptor")
+        similarity = float(np.dot(a, b) / (norm_a * norm_b))
+        return 1.0 - float(np.clip(similarity, -1.0, 1.0))
+    raise ValueError(f"unsupported comparison metric: {metric}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _make_parser()
     args = parser.parse_args(argv)
@@ -337,9 +360,25 @@ def main(argv: list[str] | None = None) -> int:
             if a.shape != b.shape:
                 errors.append(f"{input_file}: descriptor shape {a.shape} != {b.shape} of --compare")
                 continue
-            dist = float(np.linalg.norm(a - b))
+            try:
+                dist = _compare_distance(
+                    a,
+                    b,
+                    cast(Literal["euclidean", "cosine"], args.compare_metric),
+                )
+            except ValueError as exc:
+                errors.append(f"{input_file}: {exc}")
+                continue
 
-        results.append({"file": input_file, "vector": vec, "hash": h, "distance": dist})
+        results.append(
+            {
+                "file": input_file,
+                "vector": vec,
+                "hash": h,
+                "distance": dist,
+                "metric": args.compare_metric if dist is not None else None,
+            }
+        )
 
     if args.output_format == "json":
         out: list[dict[str, object]] = []
@@ -354,6 +393,8 @@ def main(argv: list[str] | None = None) -> int:
             if r["distance"] is not None:
                 entry["compare"] = args.compare
                 entry["distance"] = r["distance"]
+                if r["metric"] != "euclidean":
+                    entry["metric"] = r["metric"]
             out.append(entry)
         print(json.dumps(out, indent=2))
 
@@ -365,12 +406,16 @@ def main(argv: list[str] | None = None) -> int:
             if r["hash"] is not None:
                 msg += f"  hash={r['hash']}"
             if r["distance"] is not None:
-                msg += f"  distance={r['distance']:.8g}"
+                metric_label = "" if r["metric"] == "euclidean" else f"{r['metric']}_"
+                msg += f"  {metric_label}distance={r['distance']:.8g}"
             print(msg)
 
     elif args.compare is not None:  # text: distances only
         for r in results:
-            print(f"{r['distance']:.8g}\t{r['file']}\t{args.compare}")
+            line = f"{r['distance']:.8g}\t{r['file']}\t{args.compare}"
+            if r["metric"] != "euclidean":
+                line += f"\t{r['metric']}"
+            print(line)
 
     else:  # text
         for r in results:

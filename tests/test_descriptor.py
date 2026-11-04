@@ -197,6 +197,20 @@ class TestNonNegativity:
 
 
 class TestStructureFactors:
+    def test_debug_reports_generated_resolution(
+        self, silicon: object, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        refls = compute_structure_factors(
+            silicon,
+            sin_theta_over_lambda_max=0.5,
+            debug=True,
+        )
+
+        debug_output = capsys.readouterr().err
+        q_max = float(refls.q_magnitudes.max())
+        assert f"q_max={q_max:.6f} Å⁻¹" in debug_output
+        assert f"d_min={1.0 / q_max:.6f} Å" in debug_output
+
     def test_default_intensity_handling_is_none(self, ylid: object) -> None:
         assert RinseParams().monopole_normalisation is True
         # sin_theta_over_lambda_max = 0.5 * qmax_factor * q_max, q_max = radial_scale * n_max**(1/3)

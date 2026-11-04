@@ -184,6 +184,20 @@ def compute_structure_factors(
     q_magnitudes = q_magnitudes[mask]
     F2 = F2[mask]
 
+    if debug:
+        if q_magnitudes.size:
+            q_max = float(q_magnitudes.max())
+            print(
+                f"[rinse_descriptor] sf: resolution:       "
+                f"q_max={q_max:.6f} Å⁻¹  d_min={1.0 / q_max:.6f} Å",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "[rinse_descriptor] sf: resolution:       no non-zero reflections",
+                file=sys.stderr,
+            )
+
     if sf_type == StructureFactorType.F2:
         intensities = F2
     else:

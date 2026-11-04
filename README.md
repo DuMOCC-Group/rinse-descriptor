@@ -87,6 +87,9 @@ rinse mystructure.cif --output-format json
 
 # Save the descriptor beside the input as mystructure.npy
 rinse mystructure.cif --output-format npy
+
+# Compare against a reference using cosine distance instead of Euclidean distance
+rinse structure_1.cif structure_2.res --compare reference.cif --compare-metric cosine
 ```
 
 Use `--help` to see all options and their defaults:
@@ -98,7 +101,9 @@ rinse --version
 
 By default, the CLI uses X-ray form factors, monopole and L2 normalisation,
 and returns a flattened 128-element descriptor. Use `--no-flatten` to return
-the radial-by-angular matrix instead. Common options include:
+the radial-by-angular matrix instead. `--compare` reports Euclidean distance
+by default; `--compare-metric` supports `euclidean` and `cosine`. Common
+options include:
 
 ```bash
 # Change descriptor resolution and radial basis
@@ -151,6 +156,27 @@ x = descriptor(xrs)
 print(x.shape)  # (128,)
 ```
 
+### From a hkl file and unit cell
+
+```python
+from rinse_descriptor import descriptor_from_hkl
+
+# Unit-cell parameters are (a, b, c, alpha, beta, gamma), with lengths in Å
+# and angles in degrees.
+cell = (5.64, 5.64, 5.64, 90, 90, 90)
+x = descriptor_from_hkl(
+    "mydata.hkl",
+    cell,
+    space_group="F m -3 m",
+)
+print(x.shape)  # (128,)
+```
+
+The `.hkl` file should contain measured intensities (`h k l I sigma`). Supply
+the correct space group for the crystal; if omitted for a bare unit cell, it
+defaults to `P 1`. You can also pass a `.cif`, `.res`, or `.ins` file as the
+second argument to read both the unit cell and space group from that file.
+
 ### Custom parameters
 
 ```python
@@ -174,8 +200,6 @@ from rinse_descriptor import descriptor
 # Electron scattering factors; descriptor weights are still intensities I = |F|²
 x = descriptor("mystructure.cif", form_factor_type="electron")
 
-# Monopole (l=0) normalisation removes the resolution envelope by default.
-x_norm = descriptor("mystructure.cif")
 ```
 
 Available `form_factor_type` values: `"xray"` (default), `"electron"`, `"neutron"`.
@@ -285,14 +309,3 @@ rinse-descriptor/
 ├── .github/workflows/ci.yml
 └── pyproject.toml
 ```
-
-## Future: `rinse_descriptor.diffraction` submodule
-
-The package is designed to support a future `rinse_descriptor.diffraction` submodule that will provide:
-
-- Indexed diffraction patterns (hkl, d-spacing, intensity)
-- Unindexed powder diffraction patterns (2θ or *d*-spacing profiles)
-- Reciprocal-space descriptors beyond the power spectrum (e.g. bispectrum)
-
-The `ReflectionList` and `RinseParams` types are designed to be shared between
-the core descriptor and the diffraction submodule.
