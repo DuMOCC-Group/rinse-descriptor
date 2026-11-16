@@ -94,19 +94,25 @@ def load_res(path: str | os.PathLike[str] | IO[bytes] | IO[str]) -> Any:
 
 
 def _add_shelx_atom_defaults(text: str) -> str:
-    """Fill omitted SHELX atom occupancy and isotropic displacement fields."""
+    """Sanitize SHELX atom labels and fill omitted occupancy and displacement fields."""
     lines = []
     for line in text.splitlines():
         fields = line.split()
-        if len(fields) in (5, 6) and fields[0][0].isalpha() and fields[1].isdigit():
+        if len(fields) >= 5 and fields[0][0].isalpha() and fields[1].isdigit():
             try:
                 tuple(float(value) for value in fields[2:5])
             except ValueError:
                 pass
             else:
-                if len(fields) == 5:
-                    line += " 0.5"
-                line += " 0.1"
+                if "?" in fields[0]:
+                    leading = line[: len(line) - len(line.lstrip())]
+                    remainder = line[len(leading) :]
+                    remainder = remainder.replace(fields[0], fields[0].replace("?", ""), 1)
+                    line = leading + remainder
+                if len(fields) in (5, 6):
+                    if len(fields) == 5:
+                        line += " 0.5"
+                    line += " 0.1"
         lines.append(line)
     return "\n".join(lines)
 

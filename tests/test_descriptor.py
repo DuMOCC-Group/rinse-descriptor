@@ -160,6 +160,27 @@ class TestLoaders:
         assert scatterers[2].occupancy == pytest.approx(0.75)
         assert scatterers[2].u_iso == pytest.approx(0.03)
 
+    def test_load_res_strips_question_marks_from_atom_labels(self, tmp_path: Path) -> None:
+        res_path = tmp_path / "question_mark_atom_label.res"
+        res_path.write_text(
+            "\n".join(
+                [
+                    "TITL question mark atom label",
+                    "CELL 0.71073 5 5 5 90 90 90",
+                    "LATT 1",
+                    "SFAC C",
+                    "UNIT 1",
+                    "C1? 1 0.0 0.0 0.0 1.0 0.05",
+                    "END",
+                ]
+            )
+        )
+
+        scatterers = load_res(res_path).scatterers()
+
+        assert scatterers.size() == 1
+        assert scatterers[0].label == "C1"
+
 
 # ---------------------------------------------------------------------------
 # Reproducibility
